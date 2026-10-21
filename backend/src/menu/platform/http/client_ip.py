@@ -1,0 +1,34 @@
+"""IP del client (THR-012, SR-059): unica funzione, mai la voce più a sinistra.
+
+Con `TRUSTED_PROXY_HOPS = n` si usa la n-esima voce da destra di `X-Forwarded-For`, cioè
+quella aggiunta dal proxy fidato più vicino al servizio. Con 0 si usa l'indirizzo del peer.
+"""
+
+import ipaddress
+
+from fastapi import Request
+
+UNKNOWN = "unknown"
+
+
+def _valid(value: str) -> str | None:
+    try:
+        return str(ipaddress.ip_address(value.strip()))
+    except ValueError:
+        return None
+
+
+def client_ip_from(forwarded_for: list[str], peer: str | None, hops: int) -> str:
+    if hops > 0:
+        entries = [e for header in forwarded_for for e in header.split(",")]
+        if len(entries) >= hops:
+            picked = _valid(entries[-hops])
+            if picked is not None:
+                return picked
+    return (_valid(peer) if peer else None) or UNKNOWN
+
+
+def client_ip(request: Request) -> str:
+    hops: int = request.app.state.settings.trusted_proxy_hops
+    peer = request.client.host if request.client else None
+    return client_ip_from(request.headers.getlist("x-forwarded-for"), peer, hops)

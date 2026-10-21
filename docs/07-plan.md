@@ -748,7 +748,7 @@ Le stime di moduli e file sono indicative.
 - **Moduli e file:** circa 30 file.
 - **Dipende da:** nessuna. **Precondizione:** P-0 (strumenti locali).
 - **Agenti:** devops, backend-developer.
-- **Rischi:** `exclude-newer` relativo di uv da verificare (V-7).
+- **Rischi:** `exclude-newer` relativo di uv da verificare (V-7). Eccezione stretta al cooldown solo per certifi (GHSA-6q48-6c7w-9gw2, CVSS 9.1, 2026-10-20) con `exclude-newer-package` in `backend/pyproject.toml`: da rimuovere entro ~2026-10-27.
 
 #### SL-00b · Database locale, `bootstrap.sql`, migrazione `0001`, `tenancy` e container · M
 - **Obiettivo:** PostgreSQL 17 locale con i quattro ruoli, la prima migrazione verificata con `app.now_utc()`, l'accesso ai dati solo da `tenancy` e l'immagine container scansionata.

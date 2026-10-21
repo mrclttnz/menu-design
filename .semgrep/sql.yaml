@@ -1,0 +1,35 @@
+rules:
+  - id: menu-sqlalchemy-text-formatted
+    languages: [python]
+    severity: ERROR
+    message: "text() con f-string, format o concatenazione: usare parametri vincolati (THR-025)."
+    pattern-either:
+      - pattern: $F.text(f"...")
+      - pattern: text(f"...")
+      - pattern: text("...".format(...))
+      - pattern: $F.text("...".format(...))
+      - pattern: text($A + $B)
+      - pattern: text("..." % ...)
+  - id: menu-set-config-session-scope
+    languages: [generic]
+    severity: ERROR
+    message: "set_config(..., false) o SET di sessione vietati: solo SET LOCAL / set_config(..., true) nella transazione (THR-025, SR-042)."
+    pattern-regex: (?i)set_config\s*\([^)]*,\s*false\s*\)|\bSET\s+(?!LOCAL\b)(SESSION\s+)?(app\.|role\b|search_path\b)
+    paths:
+      exclude:
+        - "**/tests/"
+        - "**/.semgrep/"
+  - id: menu-sqlalchemy-session-outside-tenancy
+    languages: [python]
+    severity: ERROR
+    message: "Le sessioni/connessioni SQLAlchemy si aprono solo in menu.tenancy (SR-042)."
+    pattern-either:
+      - pattern: Session(...)
+      - pattern: sessionmaker(...)
+      - pattern: create_engine(...)
+    paths:
+      include:
+        - "**/backend/src/"
+      exclude:
+        - "**/backend/src/menu/tenancy/"
+        - "**/backend/src/menu/console_client/"

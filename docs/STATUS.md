@@ -4,7 +4,7 @@
 |---|---|
 | Created | 2026-10-17 |
 | Current phase | P5 Build |
-| Last update | 2026-10-20 |
+| Last update | 2026-10-21 |
 | Automatic commit at end of slice | yes (local only; every push needs the user's explicit consent) |
 | Remote | https://github.com/mrclttnz/menu-design (private, created by the user 2026-10-19); run gitleaks on full history before the first push |
 | Git | repository initialized 2026-10-17, no commits yet |
@@ -25,7 +25,7 @@
 ## Slices
 | ID | Goal | Status (TODO / IN PROGRESS / DONE) | Git base | Code review | Security review | Date |
 |---|---|---|---|---|---|---|
-| SL-00a | Repo, backend skeleton, CI with lint, tests, blocking scans | TODO | | | | |
+| SL-00a | Repo, backend skeleton, CI with lint, tests, blocking scans | DONE | 44a5a03 | docs/reviews/SL-00a-code.md (APPROVED, 6 fixed) | docs/reviews/SL-00a-security.md (0 open BLOCKER, 5 fixed) | 2026-10-21 |
 | SL-00b | Local DB, migration 0001, tenancy, DB inventories, container | TODO | | | | |
 | SL-01 | Web shell, i18n, generated client | TODO | | | | |
 | SL-02 | Console bootstrap, security log, first RLS check | TODO | | | | |
@@ -82,6 +82,16 @@
 ## Technical debt
 | Finding ID / source | Description | Severity | Scheduled in |
 |---|---|---|---|
+| SEC-SL00a-008, CR-SL00a-011 | certifi cooldown exception (backend `pyproject.toml` `exclude-newer-package` and Makefile `TOOL_CERTIFI_EXCEPTION`, user decision 2026-10-20, GHSA-6q48-6c7w-9gw2): remove both lines and re-run `uv lock` | LOW | **by 2026-10-27** |
+| SEC-SL00a-005 | `TRUSTED_PROXY_HOPS` defaults to 0: on Cloud Run per-IP limits become global; remove the default | LOW | SL-03b |
+| SEC-SL00a-006 | Hide SQL parameters in logged errors (`hide_parameters=True`) and add DB/Pydantic error canary test | LOW | SL-00b |
+| SEC-SL00a-007 | Semgrep `text()` rule: allow only literals; add `literal_column`, `exec_driver_sql`, async session variants; fixtures for `SET ROLE`/`search_path`/`SESSION` | LOW | SL-00b |
+| SEC-SL00a-009 | Dependabot with 7-day cooldown; zizmor online checks | LOW | SL-10b or earlier |
+| SEC-SL00a INFO-10, INFO-12 | Static-mount allow-list ignores router prefix; depth check skipped for body without Content-Type | INFO | SL-01 |
+| SEC-SL00a INFO-14 | Tool-install cooldown test accepts exceptions for any package; restrict to the certifi variable | INFO | SL-00b |
+| CR-SL00a-007..013 | Body-size guard fail-open branch (not exploitable on HTTP/1.1), untested platform branches, dead code in `scan-deps`, pre-commit `uv run` without `--frozen`, `make help` wording, unused `_PROBLEM_REF` in factory.py, uvicorn access-log/correlation_id notes (details in code review report) | LOW | SL-00b / SL-01 |
+| SL-00a note | 415 on every unsafe method without `Content-Type: application/json`, even with no body: frontend must send it (SL-01, SL-03a); CSP `style-src 'self'` may need review in SL-01 | INFO | SL-01 |
+| SL-00a note | docs/07-plan.md and 08-test-strategy mention semgrep 1.181.0 / zizmor 1.31.1; Makefile pins 1.180.0 / 1.30.1; docs-only CI path filter (plan §6.3) not yet implemented | INFO | before first push |
 
 ## Log
 - 2026-10-17 · orchestrator · discovery interview (P1) · –
@@ -144,3 +154,4 @@
 - 2026-10-20 · tester · test strategy §18.1: make full is local only; staging checks and 18.3 checklist only in make prerelease · docs/08-test-strategy.md
 - 2026-10-20 · tech-lead · development plan v3 final touch-ups: OBJ-16 (make full local only, staging checks only in make prerelease), OBJ-17 (blocking rule for slices without API), closed I-P3, I-P13 and §11.3 items (already_in_family auth outcome, params.units[] with reason, course_in_use); no open items left · docs/07-plan.md
 - 2026-10-20 · orchestrator · gate G4 approved by the user; Q-031 (a); staging defaults kept; slice table filled (48 TODO); phase → P5 Build · docs/STATUS.md
+- 2026-10-21 · orchestrator, devops, tester, backend-developer, code-reviewer, security-engineer · SL-00a built: repo scaffold, FastAPI skeleton (/healthz, headers, limits, If-Match, AuthzRoute, redaction), CI with blocking scans; 312 tests; reviews: 0 BLOCKER, 11 FIX-IN-SLICE fixed in 2 cycles (incl. SEC-010); certifi cooldown exception approved by the user · docs/reviews/SL-00a-code.md, docs/reviews/SL-00a-security.md

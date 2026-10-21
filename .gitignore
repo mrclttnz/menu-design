@@ -6,3 +6,23 @@
 *.p12
 secrets/
 .DS_Store
+
+# Python / Node
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage.xml
+dist/
+build/
+*.egg-info/
+node_modules/
+web/dist/
+*.log
+.idea/
+.vscode/
+.pip-audit-requirements.txt

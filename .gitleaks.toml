@@ -1,0 +1,12 @@
+title = "menu-design"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Ambienti virtuali e cache"
+paths = [
+  '''(^|/)\.venv/''',
+  '''(^|/)node_modules/''',
+  '''(^|/)\.(mypy|ruff|pytest)_cache/''',
+]

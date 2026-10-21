@@ -1,0 +1,85 @@
+[project]
+name = "menu-design"
+version = "0.0.0"
+description = "Menu Design: backend (FastAPI)"
+requires-python = ">=3.14,<3.15"
+license = "LicenseRef-Proprietary"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "pydantic",
+    "pydantic-settings",
+    "structlog",
+]
+
+[dependency-groups]
+dev = [
+    "ruff",
+    "mypy",
+    "bandit",
+    "pip-audit",
+    "pytest",
+    "pytest-cov",
+    "pytest-randomly",
+    "httpx",
+]
+
+[build-system]
+requires = ["uv_build>=0.13,<0.14"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "menu"
+
+[tool.uv]
+# SR-076: cooldown di 7 giorni sulle nuove versioni (durata relativa, V-7).
+exclude-newer = "7 days"
+# ECCEZIONE STRETTA al cooldown, solo certifi (decisione utente, 2026-10-20):
+# GHSA-6q48-6c7w-9gw2 (CVSS 9.1) colpisce certifi 2026.7.22; la fix 2026.10.19
+# ha < 7 giorni. Rimuovere questa riga entro ~2026-10-27, quando la fix sara'
+# piu' vecchia di 7 giorni e il cooldown generale la includera' da solo.
+exclude-newer-package = { certifi = "2026-10-21T00:00:00Z" }
+default-groups = ["dev"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF", "N", "PT", "DTZ", "T20"]
+
+[tool.ruff.lint.per-file-ignores]
+# S101 (assert) ammesso solo nei test; le altre regole S restano attive.
+"tests/**" = ["S101"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+strict = true
+python_version = "3.14"
+plugins = ["pydantic.mypy"]
+mypy_path = "src"
+files = ["src", "tests", "scripts"]
+
+[tool.bandit]
+exclude_dirs = ["tests"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers --strict-config"
+markers = [
+    "db: richiede PostgreSQL",
+    "sec: test di sicurezza",
+    "concurrency: test di concorrenza",
+    "smoke: contro un URL (staging o produzione)",
+    "slow: fuori dalla PR",
+    "cross_family(operation_id): isolamento tra famiglie per l'operazione",
+    "tracks(operation_id): evento di sicurezza tracciato per l'operazione",
+    "sqlfunc(name): chiamata diretta di una funzione SQL inlinabile",
+]
+
+[tool.coverage.run]
+source = ["menu"]
+branch = true

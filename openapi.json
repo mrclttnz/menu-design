@@ -1,0 +1,192 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Menu Design",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/healthz": {
+      "get": {
+        "summary": "Read Health",
+        "operationId": "platform.health.read",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Errore (RFC 9457, `code` di ADR-0010)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-authz": {
+          "scope": "public"
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ErrorCode": {
+        "type": "string",
+        "enum": [
+          "validation",
+          "not_found",
+          "forbidden",
+          "unauthenticated",
+          "reauth_required",
+          "reauth_wrong_account",
+          "csrf_failed",
+          "conflict",
+          "precondition_required",
+          "rate_limited",
+          "payload_too_large",
+          "family_pending_deletion",
+          "invite_invalid",
+          "code_invalid",
+          "age_declaration_blocked",
+          "already_in_family",
+          "last_admin",
+          "dish_already_planned",
+          "dish_not_planned",
+          "course_in_use",
+          "quota_exceeded",
+          "range_too_large",
+          "course_not_allowed",
+          "person_before_join",
+          "unsupported_media_type",
+          "internal"
+        ],
+        "title": "ErrorCode"
+      },
+      "FieldError": {
+        "properties": {
+          "field": {
+            "type": "string",
+            "title": "Field"
+          },
+          "code": {
+            "$ref": "#/components/schemas/ValidationCode"
+          },
+          "params": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Params"
+          }
+        },
+        "type": "object",
+        "required": [
+          "field",
+          "code"
+        ],
+        "title": "FieldError"
+      },
+      "Health": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "Health"
+      },
+      "ProblemDetails": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "integer",
+            "title": "Status"
+          },
+          "code": {
+            "$ref": "#/components/schemas/ErrorCode"
+          },
+          "params": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Params"
+          },
+          "errors": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/FieldError"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errors"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "title",
+          "status",
+          "code"
+        ],
+        "title": "ProblemDetails",
+        "description": "Schema pubblicato in OpenAPI per ogni risposta d'errore."
+      },
+      "ValidationCode": {
+        "type": "string",
+        "enum": [
+          "required",
+          "string_too_long",
+          "limit_reached",
+          "url_invalid",
+          "course_required",
+          "guests_range",
+          "priority_range",
+          "date_invalid",
+          "range_order",
+          "duplicate_course",
+          "invalid_value",
+          "unknown_field",
+          "dish_archived"
+        ],
+        "title": "ValidationCode",
+        "description": "Insieme chiuso dei codici di `errors[].code` (piano §4.1)."
+      }
+    }
+  }
+}

@@ -1,0 +1,15 @@
+rules:
+  - id: menu-dangerously-set-inner-html
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: "dangerouslySetInnerHTML vietato (THR-070)."
+    pattern: <$C dangerouslySetInnerHTML={...} />
+  - id: menu-token-in-web-storage
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: "localStorage/sessionStorage vietati (THR-005); il token vive solo nel cookie HttpOnly."
+    pattern-either:
+      - pattern: localStorage.$M(...)
+      - pattern: sessionStorage.$M(...)
+      - pattern: window.localStorage.$M(...)
+      - pattern: window.sessionStorage.$M(...)
