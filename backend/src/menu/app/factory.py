@@ -20,8 +20,8 @@ from menu.platform.http.problem import (
     http_exception_handler,
     validation_error_handler,
 )
+from menu.platform.http.static import StaticSite
 
-_PROBLEM_REF = "#/components/schemas/ProblemDetails"
 _PROBLEM_RESPONSE: dict[int | str, dict[str, Any]] = {
     "default": {
         "model": ProblemDetails,
@@ -89,4 +89,7 @@ def create_app(
     for router in extra_routers:
         app.include_router(router)
     assert_all_routes_declare_authz(app)
+    if settings.web_dist_dir is not None:
+        # Dopo tutte le rotte: la SPA risponde solo a ciò che l'API non ha riconosciuto.
+        app.router.default = StaticSite(settings.web_dist_dir)
     return app

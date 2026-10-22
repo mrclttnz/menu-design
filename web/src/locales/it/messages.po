@@ -1,0 +1,360 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-10-22 12:37+0200\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: it\n"
+
+#. js-lingui-explicit-id
+msgid "common.optional"
+msgstr "(facoltativo)"
+
+#. js-lingui-explicit-id
+msgid "common.required"
+msgstr "(obbligatorio)"
+
+#. js-lingui-explicit-id
+msgid "app.documentTitle"
+msgstr "{title} · {app}"
+
+#. js-lingui-explicit-id
+msgid "error.course_in_use"
+msgstr "{usageCount, plural, one {Questa portata è usata da 1 piatto, quindi non si può eliminare. Cambia prima la portata di quel piatto.} other {Questa portata è usata da # piatti, quindi non si può eliminare. Cambia prima la portata di quei piatti.}}"
+
+#. js-lingui-explicit-id
+msgid "auth.login.title"
+msgstr "Accedi a Menu Design"
+
+#. js-lingui-explicit-id
+msgid "auth.cancelled"
+msgstr "Accesso annullato. Puoi riprovare quando vuoi."
+
+#. js-lingui-explicit-id
+msgid "auth.login.inProgress"
+msgstr "Accesso in corso…"
+
+#. js-lingui-explicit-id
+msgid "account.menu"
+msgstr "Account di {name}"
+
+#. js-lingui-explicit-id
+msgid "common.add"
+msgstr "Aggiungi"
+
+#. js-lingui-explicit-id
+msgid "nav.more"
+msgstr "Altro"
+
+#. js-lingui-explicit-id
+msgid "role.admin"
+msgstr "Amministratore"
+
+#. js-lingui-explicit-id
+msgid "common.cancel"
+msgstr "Annulla"
+
+#. js-lingui-explicit-id
+msgid "common.undo"
+msgstr "Annulla"
+
+#. js-lingui-explicit-id
+msgid "common.loading"
+msgstr "Caricamento…"
+
+#. js-lingui-explicit-id
+msgid "common.close"
+msgstr "Chiudi"
+
+#. js-lingui-explicit-id
+msgid "common.loading.slow"
+msgstr "Ci sta mettendo più del solito…"
+
+#. js-lingui-explicit-id
+msgid "picker.courseChoice"
+msgstr "Come lo servi?"
+
+#. js-lingui-explicit-id
+msgid "validation.required"
+msgstr "Compila questo campo."
+
+#. js-lingui-explicit-id
+msgid "common.confirm"
+msgstr "Conferma"
+
+#. js-lingui-explicit-id
+msgid "role.member.desc"
+msgstr "Consulta il piano, segna le sue presenze, dice cosa gli piace e propone piatti da provare."
+
+#. js-lingui-explicit-id
+msgid "auth.login.google"
+msgstr "Continua con Google"
+
+#. js-lingui-explicit-id
+msgid "common.delete"
+msgstr "Elimina"
+
+#. js-lingui-explicit-id
+msgid "account.logout"
+msgstr "Esci"
+
+#. js-lingui-explicit-id
+msgid "validation.duplicate_course"
+msgstr "Esiste già una portata con questo nome."
+
+#. js-lingui-explicit-id
+msgid "accept.alreadyInFamily"
+msgstr "Fai già parte di una famiglia. In questa versione ogni account può far parte di una sola famiglia, quindi non puoi entrare con questo invito. L'invito non è stato usato."
+
+#. js-lingui-explicit-id
+msgid "common.done"
+msgstr "Fatto"
+
+#. js-lingui-explicit-id
+msgid "role.admin.desc"
+msgstr "Gestisce la famiglia, le persone e tutto il piano."
+
+#. js-lingui-explicit-id
+msgid "role.planner.desc"
+msgstr "Gestisce piatti e piano dei pasti, e le presenze di tutti."
+
+#. js-lingui-explicit-id
+msgid "account.signedInAs"
+msgstr "Hai effettuato l'accesso come {name}"
+
+#. js-lingui-explicit-id
+msgid "auth.loggedOut"
+msgstr "Hai effettuato l'uscita."
+
+#. js-lingui-explicit-id
+msgid "invite.limit"
+msgstr "Hai già {max} inviti in sospeso. Revocane uno per crearne un altro."
+
+#. js-lingui-explicit-id
+msgid "validation.limit_reached"
+msgstr "Hai raggiunto il limite di {max}."
+
+#. js-lingui-explicit-id
+msgid "error.reauth_wrong_account"
+msgstr "Hai usato un account Google diverso da quello con cui sei collegato. Accedi con {expectedEmailMasked}."
+
+#. js-lingui-explicit-id
+msgid "auth.login.subtitle"
+msgstr "Il piano dei pasti della tua famiglia, sempre in tasca."
+
+#. js-lingui-explicit-id
+msgid "common.back"
+msgstr "Indietro"
+
+#. js-lingui-explicit-id
+msgid "validation.url_invalid"
+msgstr "Inserisci un indirizzo che inizi con http:// o https://."
+
+#. js-lingui-explicit-id
+msgid "validation.guests_range"
+msgstr "Inserisci un numero da 0 a 50."
+
+#. js-lingui-explicit-id
+msgid "validation.date_invalid"
+msgstr "Inserisci una data valida."
+
+#. js-lingui-explicit-id
+msgid "validation.range_order"
+msgstr "La data finale deve essere dopo quella iniziale."
+
+#. js-lingui-explicit-id
+msgid "error.familyPendingDeletion"
+msgstr "La famiglia è in sola lettura: verrà eliminata il {date}."
+
+#. js-lingui-explicit-id
+msgid "auth.sessionExpired"
+msgstr "La sessione è scaduta. Accedi di nuovo per continuare."
+
+#. js-lingui-explicit-id
+msgid "error.sessionExpired"
+msgstr "La sessione è scaduta. Accedi di nuovo per continuare."
+
+#. js-lingui-explicit-id
+msgid "validation.string_too_long"
+msgstr "Massimo {max} caratteri."
+
+#. js-lingui-explicit-id
+msgid "role.member"
+msgstr "Membro"
+
+#. js-lingui-explicit-id
+msgid "app.name"
+msgstr "Menu Design"
+
+#. js-lingui-explicit-id
+msgid "common.edit"
+msgstr "Modifica"
+
+#. js-lingui-explicit-id
+msgid "common.showMore"
+msgstr "Mostra altri"
+
+#. js-lingui-explicit-id
+msgid "dish.deleteBlocked"
+msgstr "Nel frattempo questo piatto è stato aggiunto a un pasto, quindi non si può eliminare. Puoi archiviarlo."
+
+#. js-lingui-explicit-id
+msgid "presence.beforeJoin"
+msgstr "Non facevi ancora parte della famiglia in questo giorno."
+
+#. js-lingui-explicit-id
+msgid "auth.removed.title"
+msgstr "Non fai più parte di questa famiglia"
+
+#. js-lingui-explicit-id
+msgid "error.forbidden"
+msgstr "Non hai il permesso di fare questa operazione."
+
+#. js-lingui-explicit-id
+msgid "error.network"
+msgstr "Non riesco a collegarmi. Controlla la connessione e riprova."
+
+#. js-lingui-explicit-id
+msgid "auth.failed"
+msgstr "Non siamo riusciti a completare l'accesso. Riprova."
+
+#. js-lingui-explicit-id
+msgid "error.save"
+msgstr "Non siamo riusciti a salvare. Controlla la connessione e riprova."
+
+#. js-lingui-explicit-id
+msgid "error.notFound"
+msgstr "Non troviamo quello che cerchi. Potrebbe essere stato eliminato."
+
+#. js-lingui-explicit-id
+msgid "common.today"
+msgstr "Oggi"
+
+#. js-lingui-explicit-id
+msgid "error.notFound.title"
+msgstr "Pagina non trovata"
+
+#. js-lingui-explicit-id
+msgid "error.reauth"
+msgstr "Per sicurezza, accedi di nuovo per continuare."
+
+#. js-lingui-explicit-id
+msgid "role.planner"
+msgstr "Pianificatore"
+
+#. js-lingui-explicit-id
+msgid "nav.plan"
+msgstr "Piano"
+
+#. js-lingui-explicit-id
+msgid "nav.dishes"
+msgstr "Piatti"
+
+#. js-lingui-explicit-id
+msgid "error.quota_exceeded.other_meals_per_day"
+msgstr "Puoi avere al massimo {limit} «Altro pasto» al giorno. Togline uno per aggiungerne un altro."
+
+#. js-lingui-explicit-id
+msgid "validation.unknown_field"
+msgstr "Qualcosa non è andato come previsto. Ricarica la pagina e riprova."
+
+#. js-lingui-explicit-id
+msgid "error.generic"
+msgstr "Qualcosa non ha funzionato. Riprova tra poco."
+
+#. js-lingui-explicit-id
+msgid "conflict.title.generic"
+msgstr "Qualcuno ha modificato questi dati"
+
+#. js-lingui-explicit-id
+msgid "conflict.title.meal"
+msgstr "Qualcuno ha modificato questo pasto"
+
+#. js-lingui-explicit-id
+msgid "auth.noFamily.body"
+msgstr "Questo account Google non fa ancora parte di una famiglia. Chiedi a chi gestisce la tua famiglia di mandarti un link di invito."
+
+#. js-lingui-explicit-id
+msgid "code.invalid"
+msgstr "Questo codice non è valido o è scaduto."
+
+#. js-lingui-explicit-id
+msgid "error.inviteInvalid"
+msgstr "Questo invito non è valido o è scaduto. Chiedi di mandartene uno nuovo."
+
+#. js-lingui-explicit-id
+msgid "accept.invalid"
+msgstr "Questo invito non è valido o è scaduto. Chiedi di mandartene uno nuovo."
+
+#. js-lingui-explicit-id
+msgid "validation.dish_archived"
+msgstr "Questo piatto è archiviato e non si può aggiungere. Scegline un altro o ripristinalo dalla scheda."
+
+#. js-lingui-explicit-id
+msgid "validation.dish_archived.noRestore"
+msgstr "Questo piatto è archiviato e non si può aggiungere. Scegline un altro."
+
+#. js-lingui-explicit-id
+msgid "error.dish_not_planned"
+msgstr "Questo piatto non è mai stato pianificato, quindi non si può archiviare. Se non ti serve più, eliminalo."
+
+#. js-lingui-explicit-id
+msgid "validation.invalid_value"
+msgstr "Questo valore non è valido. Controllalo e riprova. Se il problema resta, ricarica la pagina."
+
+#. js-lingui-explicit-id
+msgid "common.retry"
+msgstr "Riprova"
+
+#. js-lingui-explicit-id
+msgid "common.save"
+msgstr "Salva"
+
+#. js-lingui-explicit-id
+msgid "error.range_too_large"
+msgstr "Scegli al massimo {maxDays} giorni."
+
+#. js-lingui-explicit-id
+msgid "validation.course_required"
+msgstr "Scegli almeno una portata."
+
+#. js-lingui-explicit-id
+msgid "validation.priority_range"
+msgstr "Scegli un numero da 1 a 10."
+
+#. js-lingui-explicit-id
+msgid "accept.under14.body"
+msgstr "Se hai meno di 14 anni non puoi avere un account. Un adulto della tua famiglia può aggiungerti come profilo senza account, così le tue presenze e i tuoi gusti contano comunque. L'invito resta valido."
+
+#. js-lingui-explicit-id
+msgid "auth.removed.body"
+msgstr "Se pensi sia un errore, chiedi a un Amministratore di invitarti di nuovo."
+
+#. js-lingui-explicit-id
+msgid "auth.noFamily.title"
+msgstr "Serve un invito"
+
+#. js-lingui-explicit-id
+msgid "common.remove"
+msgstr "Togli"
+
+#. js-lingui-explicit-id
+msgid "error.rateLimited"
+msgstr "Troppi tentativi. Riprova tra {seconds, plural, one {# secondo} other {# secondi}}."
+
+#. js-lingui-explicit-id
+msgid "people.lastAdmin.blocked"
+msgstr "Una famiglia deve avere sempre un Amministratore, e al momento sei l'unico. Per ora non puoi uscire."
+
+#. js-lingui-explicit-id
+msgid "auth.noFamily.switch"
+msgstr "Usa un altro account Google"
+
+#. js-lingui-explicit-id
+msgid "nav.skipToContent"
+msgstr "Vai al contenuto"
+
+#. js-lingui-explicit-id
+msgid "error.notFound.back"
+msgstr "Vai alla pagina di accesso"

@@ -1,0 +1,6 @@
+# Impostazioni di pnpm 12: qui, non in .npmrc (SR-076, THR-090).
+# Cooldown di 7 giorni (10080 minuti) su ogni versione nuova, senza eccezioni.
+minimumReleaseAge: 10080
+# Script di installazione bloccati; ammessi solo per i pacchetti che ne hanno bisogno.
+onlyBuiltDependencies:
+  - esbuild

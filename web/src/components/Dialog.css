@@ -1,0 +1,24 @@
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  background: rgb(31 41 55 / 55%);
+}
+
+.dialog-modal {
+  width: 100%;
+  max-width: 560px;
+  max-height: 100%;
+  overflow: auto;
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 20%);
+}
+
+.dialog {
+  padding: var(--space-5);
+}

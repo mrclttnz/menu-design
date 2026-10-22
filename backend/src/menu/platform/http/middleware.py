@@ -28,9 +28,9 @@ SECURITY_HEADERS: dict[str, str] = {
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "strict-origin-when-cross-origin",
     "Content-Security-Policy": (
-        "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
+        "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; "
         "connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; "
-        "frame-ancestors 'none'; require-trusted-types-for 'script'"
+        "frame-ancestors 'none'; require-trusted-types-for 'script'; trusted-types 'none'"
     ),
 }
 
@@ -41,6 +41,16 @@ _log = structlog.get_logger("menu.http")
 
 def is_json_content_type(value: str | None) -> bool:
     return value is not None and value.split(";")[0].strip().lower() == "application/json"
+
+
+def is_json_like_content_type(value: str | None) -> bool:
+    """Come FastAPI: senza `Content-Type`, `application/json` e `application/*+json` sono JSON."""
+    if not value or not value.split(";")[0].strip():
+        return True
+    media = value.split(";")[0].strip().lower()
+    return media == "application/json" or (
+        media.startswith("application/") and media.endswith("+json")
+    )
 
 
 def json_depth_exceeds(body: bytes, limit: int) -> bool:
@@ -108,11 +118,13 @@ class BodyGuardMiddleware:
             await self.app(scope, receive, send)
             return
         headers = Headers(scope=scope)
-        is_json = is_json_content_type(headers.get("content-type"))
+        content_type = headers.get("content-type")
+        is_json = is_json_content_type(content_type)
+        json_like = is_json_like_content_type(content_type)
         if scope["method"] in UNSAFE_METHODS and not is_json:
             await problem_response(ErrorCode.UNSUPPORTED_MEDIA_TYPE)(scope, receive, send)
             return
-        if is_json and not json_charset_is_utf8(headers.get("content-type")):
+        if json_like and not json_charset_is_utf8(content_type):
             await problem_response(ErrorCode.UNSUPPORTED_MEDIA_TYPE)(scope, receive, send)
             return
         too_large = problem_response(ErrorCode.PAYLOAD_TOO_LARGE, {"maxBytes": MAX_BODY_BYTES})
@@ -130,13 +142,13 @@ class BodyGuardMiddleware:
             chunks.append(chunk)
             if total > MAX_BODY_BYTES:
                 # Un JSON troppo profondo è un 422 anche se supera pure la dimensione.
-                too_deep = is_json and json_body_rejected(b"".join(chunks), MAX_JSON_DEPTH)
+                too_deep = json_like and json_body_rejected(b"".join(chunks), MAX_JSON_DEPTH)
                 await (too_deep_response() if too_deep else too_large)(scope, receive, send)
                 return
             more = message.get("more_body", False)
         body = b"".join(chunks)
 
-        if is_json and json_body_rejected(body, MAX_JSON_DEPTH):
+        if json_like and json_body_rejected(body, MAX_JSON_DEPTH):
             await too_deep_response()(scope, receive, send)
             return
 

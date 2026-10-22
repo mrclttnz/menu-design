@@ -72,12 +72,21 @@ def assert_all_routes_declare_authz(
     """Rifiuta l'avvio se una rotta non è `AuthzRoute` (allow-list esplicita, vuota di default).
 
     Route semplici, `Mount`, `WebSocketRoute` e `Host` sono rifiutati: non hanno `x-authz`.
-    `allowed_non_api` elenca i percorsi esatti ammessi come eccezioni (es. file statici).
+    `allowed_non_api` elenca i percorsi esatti ammessi come eccezioni, ma solo per le rotte di
+    primo livello dell'app: dentro un router incluso il percorso è relativo al prefisso e non
+    corrisponderebbe a quello effettivo (INFO-10).
     """
-    for route in _walk(app.routes):
-        if isinstance(route, AuthzRoute):
-            continue
-        path = getattr(route, "path", None)
-        if isinstance(path, str) and path in allowed_non_api:
-            continue
-        raise ValueError(f"{path or type(route).__name__}: la rotta non usa AuthzRoute")
+    for route in app.routes:
+        if type(route).__name__.startswith("_Included") or isinstance(
+            getattr(route, "original_router", None), APIRouter
+        ):
+            nested: Iterable[BaseRoute] = _walk([route])
+        else:
+            path = getattr(route, "path", None)
+            if isinstance(path, str) and path in allowed_non_api:
+                continue
+            nested = [route]
+        for leaf in nested:
+            if not isinstance(leaf, AuthzRoute):
+                path = getattr(leaf, "path", None)
+                raise ValueError(f"{path or type(leaf).__name__}: la rotta non usa AuthzRoute")

@@ -151,7 +151,7 @@ Monorepo, come richiesto da ADR-0001 e ADR-0002. Un'unica immagine container con
 │       ├── perf/                   # Locust (gruppo perf), solo prima del rilascio
 │       └── smoke/                  # pytest -m smoke contro un URL (staging, produzione dopo il deploy)
 ├── web/
-│   ├── package.json, pnpm-lock.yaml, .npmrc   # minimumReleaseAge, onlyBuiltDependencies
+│   ├── package.json, pnpm-lock.yaml, pnpm-workspace.yaml   # minimumReleaseAge, onlyBuiltDependencies
 │   ├── vite.config.ts, tsconfig.json, eslint.config.js, lingui.config.ts
 │   ├── content/it/privacy-v1.md    # informativa (bozza `draft` fino a Q-017)
 │   ├── src/
@@ -624,8 +624,8 @@ La strategia di dettaglio è del tester (`docs/08-test-strategy.md`). Il piano f
 
 ### 5.6 Dipendenze e catena di fornitura (SR-076)
 - Versioni fissate e lockfile committati (`uv.lock`, `pnpm-lock.yaml`).
-- Cooldown di 7 giorni: `[tool.uv] exclude-newer` relativo (V-7; altrimenti data assoluta aggiornata a mano) e `minimumReleaseAge=10080` in `.npmrc`.
-- Script d'installazione npm bloccati, con `onlyBuiltDependencies` limitato ai pacchetti che ne hanno bisogno (per esempio `esbuild`).
+- Cooldown di 7 giorni: `[tool.uv] exclude-newer` relativo (V-7; altrimenti data assoluta aggiornata a mano) e `minimumReleaseAge: 10080` (minuti) in `web/pnpm-workspace.yaml` (pnpm non lo legge da `.npmrc`).
+- Script d'installazione npm bloccati, con `onlyBuiltDependencies` (anch'esso in `web/pnpm-workspace.yaml`) limitato ai pacchetti che ne hanno bisogno (per esempio `esbuild`).
 - Immagini base fissate per digest (`python:3.14-slim@sha256:…`, `postgres:17@sha256:…`, `node:24-slim@sha256:…`).
 - Ogni dipendenza nuova: verifica di esistenza, nome esatto, manutenzione, licenza e CVE, nel report della slice.
 
@@ -770,7 +770,7 @@ Le stime di moduli e file sono indicative.
 #### SL-01 · Guscio web end-to-end · S
 - **Obiettivo:** la SPA localizzata è servita dallo stesso container, chiama l'API tramite il client generato e passa i controlli i18n, accessibilità e budget.
 - **US / AC:** nessuna storia (prepara S-01, S-08). NFR-011, NFR-009, NFR-001 (solo budget), NFR-008 (axe).
-- **SR:** SR-023 (CSP con Trusted Types), SR-031 (nessuno script di terze parti, `connect-src 'self'`), SR-046 (`sw.js` e `index.html` `no-cache`, asset `immutable`), SR-076 (`.npmrc`).
+- **SR:** SR-023 (CSP con Trusted Types), SR-031 (nessuno script di terze parti, `connect-src 'self'`), SR-046 (`sw.js` e `index.html` `no-cache`, asset `immutable`), SR-076 (`web/pnpm-workspace.yaml`).
 - **THR:** THR-070 (base), THR-074, THR-075, THR-090.
 - **Contenuto:** progetto `web/` (Vite, React 19, React Router, TanStack Query, React Aria Components, Lingui), strati di §2.4, catalogo `it` con le chiavi d'errore, mappa `ErrorCode` → chiavi con test di copertura, componenti base, formattazione `Intl`, `pasto-id.ts`, pagina S-01 statica; FastAPI serve i file statici; job `web` ed `e2e`; Playwright con axe; budget.
 - **Moduli e file:** circa 30 file.

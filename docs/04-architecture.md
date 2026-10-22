@@ -49,6 +49,7 @@
 | ADR-0014 | Supabase Free a Francoforte | ACCEPTED |
 | ADR-0015 | Backup giornalieri e ripristino | ACCEPTED |
 | ADR-0016 | Endpoint del database esposto | RISK ACCEPTANCE |
+| ADR-0017 | `braces` vulnerabile negli strumenti di Lingui (fino al 2026-11-21) | RISK ACCEPTANCE |
 
 Gli ADR accettati il 2026-10-19 (0001, 0006 … 0013) sono stati confermati dopo il secondo giro della revisione critica (nessun blocco).
 

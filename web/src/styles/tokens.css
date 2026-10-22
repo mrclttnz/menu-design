@@ -1,0 +1,28 @@
+/* Token di colore e tipografia (docs/03-ux.md §9.2-§9.4). Tema chiaro. */
+:root {
+  --color-bg: #ffffff;
+  --color-surface: #f9fafb;
+  --color-text: #1f2937;
+  --color-text-muted: #4b5563;
+  --color-border: #6b7280;
+  --color-divider: #d1d5db;
+  --color-primary: #15803d;
+  --color-primary-hover: #166534;
+  --color-primary-subtle: #f0fdf4;
+  --color-danger: #b91c1c;
+  --color-danger-subtle: #fef2f2;
+  --color-warning-subtle: #fffbeb;
+  --color-info: #1d4ed8;
+  --color-info-subtle: #eff6ff;
+  --color-focus: #1d4ed8;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --radius: 8px;
+  --target: 44px;
+}

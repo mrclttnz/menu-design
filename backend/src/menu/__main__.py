@@ -20,6 +20,7 @@ def _serve(host: str, port: int) -> int:
         access_log=False,  # il log delle richieste è quello strutturato dell'app (SR-021)
         proxy_headers=False,  # l'IP del client lo decide `client_ip` (TRUSTED_PROXY_HOPS)
         server_header=False,
+        log_config=None,  # i logger di uvicorn usano la redazione del logger radice (SEC-SL00b-006)
     )
     return 0
 

@@ -77,7 +77,7 @@ def test_cmd_runs_the_server_with_the_access_log_off_by_code() -> None:
 def test_dockerignore_keeps_secrets_git_tests_and_docs_out_of_the_context() -> None:
     assert DOCKERIGNORE.is_file()
     lines = {ln.strip() for ln in DOCKERIGNORE.read_text(encoding="utf-8").splitlines()}
-    for needed in (".git", ".env", ".env.*"):
+    for needed in (".git", "**/.env", "**/.env.*", "!.env.example"):
         assert needed in lines, f".dockerignore senza {needed}"
     assert any(x in lines for x in ("backend/tests", "**/tests", "backend/tests/"))
 

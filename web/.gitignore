@@ -1,0 +1,8 @@
+node_modules/
+dist/
+coverage/
+test-results/
+playwright-report/
+# generati da `lingui compile`: l'app importa i .po direttamente
+src/locales/*/messages.js
+src/locales/*/messages.ts

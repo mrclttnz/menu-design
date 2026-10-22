@@ -5,6 +5,7 @@
 contiene la password: resta un `SecretStr` e non compare in errori, repr o log (CWE-532).
 """
 
+from pathlib import Path
 from typing import Literal
 from urllib.parse import parse_qsl, urlsplit
 
@@ -38,9 +39,22 @@ class Settings(BaseSettings):
     app_env: AppEnv
     trusted_proxy_hops: int = Field(default=0, ge=0, le=10)
     database_url_app: SecretStr
+    web_dist_dir: Path | None = None
 
     @field_validator("database_url_app")
     @classmethod
     def _verify_full_only(cls, value: SecretStr) -> SecretStr:
         check_database_url(value.get_secret_value())
+        return value
+
+    @field_validator("web_dist_dir", mode="before")
+    @classmethod
+    def _empty_means_unset(cls, value: object) -> object:
+        return None if value == "" else value
+
+    @field_validator("web_dist_dir")
+    @classmethod
+    def _dist_has_index(cls, value: Path | None) -> Path | None:
+        if value is not None and not (value.is_dir() and (value / "index.html").is_file()):
+            raise ValueError("WEB_DIST_DIR deve essere una cartella con index.html")
         return value

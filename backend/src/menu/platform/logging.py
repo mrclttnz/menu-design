@@ -5,6 +5,7 @@ solo un'etichetta del log, non un istante persistito.
 """
 
 import logging
+import sys
 from collections.abc import MutableMapping
 from typing import Any
 
@@ -67,7 +68,71 @@ def redact(_: WrappedLogger, __: str, event_dict: MutableMapping[str, Any]) -> E
     return clean
 
 
+def _foreign_event(_: WrappedLogger, __: str, event_dict: EventDict) -> EventDict:
+    """Record della libreria standard (sqlalchemy, uvicorn.error...): niente testo libero.
+
+    Il messaggio può contenere parametri SQL o valori dell'utente (SEC-SL00b-006): si registra
+    solo il nome del logger e, se c'è un'eccezione, il nome del suo tipo (mai traceback né testo).
+    """
+    record = event_dict.get("_record")
+    event_dict["event"] = f"stdlib.{getattr(record, 'name', 'unknown')}"
+    exc_info = event_dict.pop("exc_info", None)
+    exc = exc_info[1] if isinstance(exc_info, tuple) else None
+    if isinstance(exc, BaseException):
+        event_dict["exception"] = type(exc).__name__
+    return event_dict
+
+
+def _stdlib_severity(_: WrappedLogger, method_name: str, event_dict: EventDict) -> EventDict:
+    event_dict["severity"] = method_name.upper()
+    return event_dict
+
+
+_HANDLER_MARK = "_menu_redacting_handler"
+
+
+class _StdoutHandler(logging.StreamHandler):  # type: ignore[type-arg]
+    """Scrive sul `sys.stdout` corrente (come `PrintLogger`), non su quello della creazione."""
+
+    def __init__(self) -> None:
+        super().__init__(sys.stdout)
+
+    @property
+    def stream(self) -> Any:
+        return sys.stdout
+
+    @stream.setter
+    def stream(self, _: Any) -> None:
+        pass
+
+
+def _configure_stdlib() -> None:
+    """Instrada il logger radice nella stessa redazione di structlog (una volta sola)."""
+    root = logging.getLogger()
+    if any(getattr(h, _HANDLER_MARK, False) for h in root.handlers):
+        return
+    handler = _StdoutHandler()
+    handler.setFormatter(
+        structlog.stdlib.ProcessorFormatter(
+            use_get_message=False,
+            foreign_pre_chain=[
+                _foreign_event,
+                _stdlib_severity,
+                structlog.processors.TimeStamper(fmt="iso", utc=True, key="timestamp"),
+            ],
+            processors=[redact, structlog.processors.JSONRenderer()],
+        )
+    )
+    setattr(handler, _HANDLER_MARK, True)
+    root.addHandler(handler)
+    # Un errore di formattazione non deve stampare messaggio e argomenti su stderr (CWE-532).
+    logging.raiseExceptions = False
+    if root.level == logging.NOTSET or root.level > logging.WARNING:
+        root.setLevel(logging.WARNING)
+
+
 def configure_logging() -> None:
+    _configure_stdlib()
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,

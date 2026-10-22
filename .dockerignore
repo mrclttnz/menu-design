@@ -1,8 +1,9 @@
-# Contesto di build minimo: solo backend/pyproject.toml, uv.lock e src (SR-076, THR-092).
+# Contesto di build minimo: backend (pyproject.toml, uv.lock, src) e i sorgenti di web/ senza
+# moduli, test e risultati (SR-076, THR-092).
 .git
 .github
-.env
-.env.*
+**/.env
+**/.env.*
 !.env.example
 .venv
 **/.venv
@@ -23,8 +24,13 @@ scripts
 compose.yaml
 Makefile
 openapi.json
-web
-node_modules
+**/node_modules
+web/tests
+web/dist
+web/test-results
+web/coverage
+web/playwright-report
+web/playwright.config.ts
 backend/tests
 backend/scripts
 backend/migrations

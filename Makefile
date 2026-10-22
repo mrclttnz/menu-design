@@ -7,6 +7,10 @@ SHELL := /bin/bash
 UV      ?= uv
 BACKEND := backend
 RUN     := cd $(BACKEND) && $(UV) run --frozen
+WEB     := web
+# pnpm viene da corepack alla versione fissata in web/package.json (`packageManager`).
+# Cooldown e script d'installazione sono in web/pnpm-workspace.yaml (SR-076).
+PNPM    := cd $(WEB) && pnpm
 
 # Strumenti di scansione installati fuori dal lockfile (SR-076): versione fissata
 # e cooldown di 7 giorni anche sulle dipendenze transitive. Stesse versioni in CI.
@@ -41,16 +45,18 @@ if [ -z "$${MENU_TEST_PG_ADMIN_PASSWORD:-}" ]; then \
 fi
 endef
 
-.PHONY: help sync dev db-up db-down db-reset dev-certs tier-db tier-container lint lint-py lint-web test test-unit test-db test-int test-sec test-prop \
+.PHONY: help sync dev db-up db-down db-reset dev-certs tier-db tier-container tier-web web-install web-build lint lint-py lint-web test test-web test-unit test-db test-int test-sec test-prop \
         test-conc test-contract e2e lighthouse perf smoke dast scan scan-secrets scan-sast \
         scan-deps scan-workflows scan-web scan-container scan-rules tools-semgrep tools-zizmor ci nightly full prerelease openapi seed
 
 help:
 	@echo "Target attivi: sync dev db-up db-down db-reset lint test test-unit test-contract"
 	@echo "        test-db test-int test-sec test-prop test-conc scan scan-container ci"
-	@echo "        (db e container sono livelli di 'make ci' da SL-00b; 'make dev' avvia PostgreSQL 17 con TLS)"
+	@echo "        lint-web test-web web-build scan-web tier-web e2e"
+	@echo "        (db e container sono livelli di 'make ci' da SL-00b; 'make dev' avvia PostgreSQL 17 con TLS;"
+	@echo "         web ed e2e da SL-01: pnpm da corepack, Chromium via 'pnpm exec playwright install chromium')"
 	@echo "Segnaposto ('disponibile da SL-xx', falliscono se chiamati):"
-	@echo "        e2e lighthouse perf smoke dast nightly full prerelease seed"
+	@echo "        lighthouse perf smoke dast nightly full prerelease seed"
 
 sync:
 	cd $(BACKEND) && $(UV) sync --frozen
@@ -71,7 +77,7 @@ db-reset:
 	docker compose down --volumes
 
 # --- lint -----------------------------------------------------------------
-lint: lint-py
+lint: lint-py lint-web
 
 lint-py: sync
 	cd $(BACKEND) && $(UV) lock --check
@@ -80,11 +86,31 @@ lint-py: sync
 	$(RUN) mypy
 	$(RUN) bandit -q -c pyproject.toml -r src
 
-lint-web:
-	$(call todo,SL-01,lint-web)
+# Installazione dal solo lockfile (SR-076): `--frozen-lockfile` fallisce se non coincide.
+web-install:
+	$(PNPM) install --frozen-lockfile
+
+lint-web: web-install
+	$(PNPM) run lint
+	$(PNPM) run format:check
+	$(PNPM) run typecheck
+	$(PNPM) run i18n:check
+	$(PNPM) run i18n:compile
+
+# Compila la SPA in web/dist e verifica il budget del bundle (NFR-001).
+web-build: web-install
+	$(PNPM) run build
+	$(PNPM) run budget
 
 # --- test -----------------------------------------------------------------
-test: test-unit tier-db test-contract
+test: test-unit test-web tier-db test-contract
+
+# Livello `web` di `make ci`.
+tier-web: lint-web test-web web-build
+
+test-web: web-install
+	$(PNPM) run test
+	$(PNPM) run api:check
 
 # Livello `db` di `make ci` (piano §6.1): db, integrazione, sicurezza, proprieta', concorrenza.
 tier-db: test-db test-int test-sec test-prop test-conc
@@ -110,8 +136,11 @@ test-conc: sync $(ENSURE_DB)
 	  echo "--- concorrenza: ripetizione $$i/$(CONC_REPEAT)"; \
 	  ( $(RUN) pytest tests/concurrency -n $(CONC_WORKERS) ) || exit 1; done
 
-e2e:
-	$(call todo,SL-01,e2e)
+# Playwright avvia da solo il server FastAPI che serve web/dist (E2E_BASE_URL: server gia' avviato).
+# Chromium: `cd web && pnpm exec playwright install chromium` (in CI con --with-deps).
+e2e: web-install
+	$(PNPM) run build
+	$(PNPM) run test:e2e
 lighthouse:
 	$(call todo,SL-06a,lighthouse)
 perf:
@@ -126,9 +155,9 @@ seed:
 	$(call todo,SL-10a,seed)
 
 # --- scansioni (SR-076) ----------------------------------------------------
-# Attive in SL-00a: segreti, SAST, dipendenze Python, workflow.
+# Attive in SL-00a: segreti, SAST, dipendenze Python, workflow; da SL-01 anche pnpm audit.
 # scan-web (pnpm audit) da SL-01. scan-container (hadolint, trivy) e' il livello `container`.
-scan: scan-secrets scan-sast scan-deps scan-workflows
+scan: scan-secrets scan-sast scan-deps scan-workflows scan-web
 
 scan-secrets:
 	gitleaks git . --config .gitleaks.toml --redact --no-banner
@@ -156,20 +185,49 @@ scan-rules:
 scan-sast: scan-rules
 	semgrep scan --metrics=off --error --quiet \
 	  --config p/python --config p/owasp-top-ten --config p/typescript --config p/react \
-	  --config .semgrep backend $$( [ -d web ] && echo web )
+	  --config .semgrep backend web
 
 scan-deps: sync
 	req="$$(mktemp)"; trap 'rm -f "$$req"' EXIT; \
 	cd $(BACKEND) && $(UV) export --frozen --no-emit-project --format requirements-txt \
 	  -o "$$req" >/dev/null && \
 	$(UV) run --frozen pip-audit -r "$$req" --no-deps --disable-pip --progress-spinner off
-	osv-scanner scan source --lockfile $(BACKEND)/uv.lock
+	osv-scanner scan source --lockfile $(BACKEND)/uv.lock --config osv-scanner.toml --lockfile $(WEB)/pnpm-lock.yaml
 
 scan-workflows:
 	zizmor --no-progress .github/workflows
 
-scan-web:
-	$(call todo,SL-01,scan-web)
+# Include le devDependencies (nessun --prod) e fallisce se il registro non risponde.
+# ECCEZIONE STRETTA e DATATA, solo questo GHSA (decisione utente 2026-10-22): braces <=3.0.3
+# (HIGH, solo dev via micromatch <- @lingui/cli, eslint-plugin-lingui; nessuna versione corretta).
+# `pnpm audit --ignore` non e' usabile: scrive l'esenzione in pnpm-workspace.yaml, senza scadenza.
+# Qui il report JSON e' filtrato per quell'unico ID, solo prima di WEB_AUDIT_EXCEPTION_UNTIL (UTC);
+# dopo, o se il report manca o e' illeggibile (registro irraggiungibile), l'audit fallisce.
+# (pnpm esce con codice != 0 se trova vulnerabilita': il verdetto e' solo quello del filtro.)
+# Tenere allineata con osv-scanner.toml.
+WEB_AUDIT_EXCEPTION_GHSA  := GHSA-vfj7-8cjw-p6xm
+WEB_AUDIT_EXCEPTION_UNTIL := 2026-11-21
+
+define WEB_AUDIT_VERDICT
+const fs = require("fs");
+const until = process.env.EXC_UNTIL, id = process.env.EXC_GHSA;
+const active = new Date().toISOString().slice(0, 10) < until;
+let r;
+try { r = JSON.parse(fs.readFileSync(0, "utf8")); } catch { console.error("audit: report illeggibile"); process.exit(1); }
+if (!r || typeof r.advisories !== "object" || !r.metadata) { console.error("audit: report incompleto"); process.exit(1); }
+const bad = Object.values(r.advisories).filter((a) => ["high", "critical"].includes(a.severity)
+  && !(active && a.github_advisory_id === id));
+for (const a of bad) console.error("audit: " + a.severity + " " + a.github_advisory_id + " " + a.module_name + " " + a.vulnerable_versions);
+if (!active) console.error("audit: eccezione " + id + " scaduta il " + until);
+process.exit(bad.length ? 1 : 0);
+endef
+export WEB_AUDIT_VERDICT
+
+scan-web: web-install
+	f="$$(mktemp)"; trap 'rm -f "$$f"' EXIT; \
+	$(PNPM) audit --audit-level high --json > "$$f" || audit_rc=$$?; \
+	EXC_GHSA="$(WEB_AUDIT_EXCEPTION_GHSA)" EXC_UNTIL="$(WEB_AUDIT_EXCEPTION_UNTIL)" \
+	  node -e "$$WEB_AUDIT_VERDICT" < "$$f"
 
 # Livello `container`: hadolint, build, trivy (immagine: HIGH e CRITICAL con correzione;
 # configurazione: Dockerfile, compose.yaml e workflow).
@@ -179,7 +237,7 @@ tier-container:
 	docker build -t $(IMAGE_TAG) -f Dockerfile .
 	trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed --no-progress --skip-version-check $(IMAGE_TAG)
 	trivy config --exit-code 1 --severity HIGH,CRITICAL --skip-version-check --skip-dirs .venv,backend/.venv,backend/tests .
-	$(RUN) pytest tests/tools/test_container.py -m container
+	$(RUN) pytest tests/tools/test_container.py tests/tools/test_container_web.py -m container
 
 # --- livelli -----------------------------------------------------------------
 ci:

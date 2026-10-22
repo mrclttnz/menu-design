@@ -2,14 +2,44 @@ rules:
   - id: menu-dangerously-set-inner-html
     languages: [typescript, javascript]
     severity: ERROR
+    paths:
+      include: ["**/src/**"]
     message: "dangerouslySetInnerHTML vietato (THR-070)."
     pattern: <$C dangerouslySetInnerHTML={...} />
   - id: menu-token-in-web-storage
     languages: [typescript, javascript]
     severity: ERROR
+    paths:
+      include: ["**/src/**"]
     message: "localStorage/sessionStorage vietati (THR-005); il token vive solo nel cookie HttpOnly."
     pattern-either:
       - pattern: localStorage.$M(...)
       - pattern: sessionStorage.$M(...)
       - pattern: window.localStorage.$M(...)
       - pattern: window.sessionStorage.$M(...)
+  - id: menu-dom-html-sink
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: "innerHTML/outerHTML/insertAdjacentHTML/document.write vietati: il testo si mostra con React o textContent (THR-005, THR-070)."
+    paths:
+      include: ["**/src/**"]
+    pattern-either:
+      - pattern: $E.innerHTML = $V
+      - pattern: $E.outerHTML = $V
+      - pattern: $E.innerHTML += $V
+      - pattern: $E.insertAdjacentHTML(...)
+      - pattern: document.write(...)
+      - pattern: document.writeln(...)
+      - pattern: $E.setHTMLUnsafe(...)
+  - id: menu-dynamic-code-eval
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: "eval/new Function vietati (CSP senza unsafe-eval, THR-005)."
+    paths:
+      include: ["**/src/**"]
+    pattern-either:
+      - pattern: eval(...)
+      - pattern: new Function(...)
+      - pattern: Function(...)
+      - pattern: window.eval(...)
+      - pattern: globalThis.eval(...)

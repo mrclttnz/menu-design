@@ -1,0 +1,7 @@
+# Unica eccezione di osv-scanner (decisione utente 2026-10-22), con scadenza: dopo ignoreUntil
+# la scansione torna a fallire. Tenere allineata con WEB_AUDIT_EXCEPTION_* nel Makefile.
+# braces <=3.0.3 (HIGH, solo dev: micromatch <- @lingui/cli, eslint-plugin-lingui; nessuna versione corretta).
+[[IgnoredVulns]]
+id = "GHSA-vfj7-8cjw-p6xm"
+ignoreUntil = 2026-11-21T00:00:00Z
+reason = "braces DoS: solo devDependencies, nessuna correzione disponibile; rivalutare entro la scadenza"

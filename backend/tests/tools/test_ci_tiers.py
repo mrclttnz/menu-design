@@ -83,9 +83,12 @@ def test_ci_lists_placeholder_targets_nowhere() -> None:
         assert "non è ancora disponibile" not in dry.stdout, f"{tier} -> segnaposto"
 
 
-@pytest.mark.parametrize("target", ["e2e", "perf", "smoke", "lighthouse", "dast"])
+@pytest.mark.parametrize("target", ["perf", "smoke", "lighthouse", "dast"])
 def test_placeholder_target_fails_loudly_when_called_directly(target: str) -> None:
-    """Piano §6.1: un segnaposto fallisce con messaggio esplicito, mai verde a vuoto."""
+    """Piano §6.1: un segnaposto fallisce con messaggio esplicito, mai verde a vuoto.
+
+    SL-01: `e2e` è uscito dall'elenco perché da questa slice è un livello attivo
+    (modifica prevista dal piano §6.1, non un indebolimento del controllo)."""
     proc = subprocess.run(  # noqa: S603
         ["make", "--no-print-directory", "-C", str(REPO), target],  # noqa: S607
         capture_output=True,
@@ -201,3 +204,35 @@ def test_help_check_goes_red_when_an_activated_target_is_a_placeholder() -> None
         "        e2e perf test-db\n"
     )
     assert activated_targets_listed_as_placeholders(mutated) == ["test-db"]
+
+
+# --- SL-01: i livelli `web` ed `e2e` diventano attivi (piano §6.1, 08 §18.1) -------------------
+
+
+def test_sl_01_tiers_are_active_in_ci_sh() -> None:
+    assert {"web", "e2e"} <= set(_ci_tiers())
+
+
+def test_sl_01_tiers_map_to_real_targets_that_run_pnpm_and_playwright() -> None:
+    text = CI_SH.read_text(encoding="utf-8")
+    targets = dict(re.findall(r"\[(\w+)\]=\"([\w-]+)\"", text))
+    assert {"web", "e2e"} <= set(targets)
+    web = subprocess.run(  # noqa: S603
+        ["make", "-n", "--no-print-directory", "-C", str(REPO), targets["web"]],  # noqa: S607
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    e2e = subprocess.run(  # noqa: S603
+        ["make", "-n", "--no-print-directory", "-C", str(REPO), targets["e2e"]],  # noqa: S607
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert web.returncode == 0, web.stderr
+    assert e2e.returncode == 0, e2e.stderr
+    assert "non è ancora disponibile" not in web.stdout + e2e.stdout
+    assert "pnpm" in web.stdout
+    assert "playwright" in e2e.stdout or "test:e2e" in e2e.stdout

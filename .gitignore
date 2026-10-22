@@ -22,6 +22,9 @@ build/
 *.egg-info/
 node_modules/
 web/dist/
+test-results/
+playwright-report/
+*.tsbuildinfo
 *.log
 .idea/
 .vscode/

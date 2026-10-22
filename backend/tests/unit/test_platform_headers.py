@@ -33,6 +33,8 @@ def check_security_headers(resp: Response) -> None:
     assert csp["frame-ancestors"] == ["'none'"]
     assert csp["connect-src"] == ["'self'"]
     assert csp["require-trusted-types-for"] == ["'script'"]
+    assert csp["trusted-types"] == ["'none'"]
+    assert csp["img-src"] == ["'self'"]
     for directive in ("default-src", "script-src"):
         values = csp.get(directive, [])
         assert "'unsafe-inline'" not in values
