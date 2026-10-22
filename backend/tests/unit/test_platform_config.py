@@ -32,7 +32,7 @@ def test_startup_accepts_each_allowed_app_env(
 ) -> None:
     monkeypatch.setenv("APP_ENV", value)
     with TestClient(create_app()) as client:
-        assert client.get("/healthz").status_code == 200
+        assert client.get("/healthz").status_code == 503  # DB di prova irraggiungibile (SL-00b)
 
 
 @pytest.mark.parametrize("value", ["dev", "test", "staging", "production"])

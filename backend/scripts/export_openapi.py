@@ -10,6 +10,11 @@ from pathlib import Path
 
 os.environ["APP_ENV"] = "test"
 os.environ["TRUSTED_PROXY_HOPS"] = "0"
+os.environ.setdefault(
+    "DATABASE_URL_APP",
+    "postgresql+psycopg://menu_app:schema-only@localhost:1/menu"
+    "?sslmode=verify-full&sslrootcert=/nonexistent/ca.crt",
+)
 
 from menu.app import create_app
 

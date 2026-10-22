@@ -83,7 +83,7 @@ def test_ci_lists_placeholder_targets_nowhere() -> None:
         assert "non è ancora disponibile" not in dry.stdout, f"{tier} -> segnaposto"
 
 
-@pytest.mark.parametrize("target", ["test-db", "test-int", "test-sec", "e2e", "perf", "smoke"])
+@pytest.mark.parametrize("target", ["e2e", "perf", "smoke", "lighthouse", "dast"])
 def test_placeholder_target_fails_loudly_when_called_directly(target: str) -> None:
     """Piano §6.1: un segnaposto fallisce con messaggio esplicito, mai verde a vuoto."""
     proc = subprocess.run(  # noqa: S603
@@ -100,3 +100,104 @@ def test_placeholder_target_fails_loudly_when_called_directly(target: str) -> No
 def test_ci_summary_declares_executed_tiers() -> None:
     """08 §18.1: il riepilogo di `make ci` elenca i livelli eseguiti."""
     assert "livelli eseguiti" in CI_SH.read_text(encoding="utf-8")
+
+
+# --- SL-00b: i livelli `db` e `container` diventano attivi (piano §6.1, 08 §18.1) -------------
+
+
+def test_sl_00b_tiers_are_active_in_ci_sh() -> None:
+    assert {"db", "container"} <= set(_ci_tiers())
+
+
+@pytest.mark.parametrize(
+    "target", ["test-db", "test-int", "test-sec", "test-prop", "test-conc", "scan-container", "dev"]
+)
+def test_sl_00b_targets_are_no_longer_placeholders(target: str) -> None:
+    dry = subprocess.run(  # noqa: S603
+        ["make", "-n", "--no-print-directory", "-C", str(REPO), target],  # noqa: S607
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert dry.returncode == 0, dry.stderr
+    assert "non è ancora disponibile" not in dry.stdout, f"{target} è ancora un segnaposto"
+
+
+def test_db_tier_runs_every_database_backed_suite() -> None:
+    """Il livello `db` copre db, integrazione, sicurezza, proprietà e concorrenza."""
+    targets = dict(re.findall(r"\[(\w+)\]=\"([\w-]+)\"", CI_SH.read_text(encoding="utf-8")))
+    assert "db" in targets, "livello db non mappato in scripts/ci.sh"
+    dry = subprocess.run(  # noqa: S603
+        ["make", "-n", "--no-print-directory", "-C", str(REPO), targets["db"]],  # noqa: S607
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    for folder in ("tests/db", "tests/integration", "tests/security", "tests/property",
+                   "tests/concurrency"):  # fmt: skip
+        assert folder in dry.stdout, f"{folder} non è eseguito dal livello db"
+
+
+def test_container_tier_runs_hadolint_build_and_trivy() -> None:
+    targets = dict(re.findall(r"\[(\w+)\]=\"([\w-]+)\"", CI_SH.read_text(encoding="utf-8")))
+    assert "container" in targets
+    dry = subprocess.run(  # noqa: S603
+        ["make", "-n", "--no-print-directory", "-C", str(REPO), targets["container"]],  # noqa: S607
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    for needle in ("hadolint", "docker build", "trivy image", "trivy config"):
+        assert needle in dry.stdout, f"{needle} manca dal livello container"
+
+
+ACTIVATED_BY_SL_00B = (
+    "test-db",
+    "test-int",
+    "test-sec",
+    "test-prop",
+    "test-conc",
+    "scan-container",
+)
+
+
+def help_sections(help_text: str) -> tuple[str, str]:
+    """(testo prima della riga 'Segnaposto', riga/e dei segnaposto che la seguono)."""
+    lines = help_text.splitlines()
+    idx = next(i for i, ln in enumerate(lines) if ln.lower().startswith("segnaposto"))
+    return "\n".join(lines[:idx]), "\n".join(lines[idx:])
+
+
+def activated_targets_listed_as_placeholders(help_text: str) -> list[str]:
+    _, placeholders = help_sections(help_text)
+    words = set(placeholders.replace("(", " ").replace(")", " ").split())
+    return [t for t in ACTIVATED_BY_SL_00B if t in words]
+
+
+def test_make_help_lists_activated_targets_as_active() -> None:
+    """CR-SL00a-013 / CR-SL00b-001: dopo SL-00b i livelli DB non sono 'segnaposto'."""
+    out = subprocess.run(  # noqa: S603
+        ["make", "--no-print-directory", "-C", str(REPO), "help"],  # noqa: S607
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    ).stdout
+    active, placeholders = help_sections(out)
+    assert placeholders.strip(), "sezione segnaposto vuota o non trovata"
+    for target in ACTIVATED_BY_SL_00B:
+        assert target in active, f"{target} non è elencato tra i target attivi"
+    assert activated_targets_listed_as_placeholders(out) == []
+
+
+def test_help_check_goes_red_when_an_activated_target_is_a_placeholder() -> None:
+    """Mutazione sintetica del testo di `make help`: il controllo deve segnalare test-db."""
+    mutated = (
+        "Target attivi: sync lint\n"
+        "Segnaposto ('disponibile da SL-xx', falliscono se chiamati):\n"
+        "        e2e perf test-db\n"
+    )
+    assert activated_targets_listed_as_placeholders(mutated) == ["test-db"]

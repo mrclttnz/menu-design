@@ -7,13 +7,15 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
-CI_TIERS=(lint unit contract scan)
+CI_TIERS=(lint unit contract scan db container)
 
 declare -A TIER_TARGETS=(
   [lint]="lint"
   [unit]="test-unit"
   [contract]="test-contract"
   [scan]="scan"
+  [db]="tier-db"
+  [container]="tier-container"
 )
 
 ran=() failed=()

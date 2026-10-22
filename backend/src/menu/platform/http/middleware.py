@@ -8,6 +8,7 @@ corpo e profondità JSON prima che la richiesta arrivi al router.
 
 import re
 import time
+import traceback
 import uuid
 
 import structlog
@@ -73,6 +74,26 @@ def json_body_rejected(body: bytes, limit: int) -> bool:
     return b"\x00" in body or json_depth_exceeds(body, limit)
 
 
+def describe_exception(error: BaseException) -> str:
+    """Solo i tipi della catena di cause e i punti dello stack: mai i messaggi (CWE-532).
+
+    I messaggi di psycopg e Pydantic riportano valori (`DETAIL`, `input_value`).
+    """
+    names: list[str] = []
+    current: BaseException | None = error
+    while current is not None and len(names) < 6:
+        names.append(type(current).__name__)
+        nested = getattr(current, "orig", None)
+        if isinstance(nested, BaseException):
+            names.append(type(nested).__name__)
+        current = current.__cause__ or current.__context__
+    frames = [
+        f"{frame.filename.rsplit('/', 1)[-1]}:{frame.lineno}:{frame.name}"
+        for frame in traceback.extract_tb(error.__traceback__)
+    ]
+    return " <- ".join(names) + " @ " + " > ".join(frames[-12:])
+
+
 def too_deep_response() -> Response:
     errors = [field_error("", ValidationCode.INVALID_VALUE)]
     return problem_response(ErrorCode.VALIDATION, errors=errors)
@@ -95,11 +116,8 @@ class BodyGuardMiddleware:
             await problem_response(ErrorCode.UNSUPPORTED_MEDIA_TYPE)(scope, receive, send)
             return
         too_large = problem_response(ErrorCode.PAYLOAD_TOO_LARGE, {"maxBytes": MAX_BODY_BYTES})
-        declared = headers.get("content-length", "")
-        if not declared.isdigit() and "transfer-encoding" not in headers:
-            await self.app(scope, receive, send)
-            return
-
+        # Fail closed (CR-SL00a-007): il corpo si legge sempre, con o senza `Content-Length`
+        # (HTTP/2 non lo richiede), e non oltre il limite.
         chunks: list[bytes] = []
         total = 0
         more = True
@@ -143,7 +161,8 @@ class EnvelopeMiddleware:
             await self.app(scope, receive, send)
             return
 
-        correlation_id = str(uuid.uuid4())
+        correlation_id = uuid.uuid4()
+        scope.setdefault("state", {})["correlation_id"] = correlation_id
         started = time.perf_counter()
         status = 500
         response_started = False
@@ -159,11 +178,14 @@ class EnvelopeMiddleware:
                 headers.setdefault("Cache-Control", "no-store")
             await send(message)
 
-        with structlog.contextvars.bound_contextvars(correlation_id=correlation_id):
+        with structlog.contextvars.bound_contextvars(correlation_id=str(correlation_id)):
             try:
                 await self.app(scope, receive, send_wrapper)
-            except Exception:
-                _log.exception("http.unhandled_exception")
+            except Exception as error:
+                _log.error(
+                    "http.unhandled_exception",
+                    exception=describe_exception(error),
+                )
                 if response_started:
                     raise
                 await problem_response(ErrorCode.INTERNAL)(scope, receive, send_wrapper)

@@ -3,6 +3,8 @@
 import tomllib
 from typing import Any
 
+import pytest
+
 from support.paths import BACKEND, REPO
 
 
@@ -46,6 +48,99 @@ def test_lockfile_checked_in_lint() -> None:
     assert "uv lock --check" in _makefile() or "$(UV) lock --check" in _makefile()
 
 
+def _tool_exception(tool: str) -> str:
+    """INFO-14: l'eccezione ammessa è solo `$(TOOL_CERTIFI_EXCEPTION)` e solo su semgrep."""
+    return r'--exclude-newer-package "\$\(TOOL_CERTIFI_EXCEPTION\)" ' if tool == "semgrep" else ""
+
+
+def tool_lines_comply(mk: str) -> bool:
+    """True se le righe `tool install` rispettano la regola INFO-14 (usato anche in negativo)."""
+    import re
+
+    for tool in ("semgrep", "zizmor"):
+        pin = rf'"{tool}==\$\({tool.upper()}_VERSION\)"'
+        head = r'tool install --force --exclude-newer "\$\(TOOL_COOLDOWN\)" '
+        if not re.search(head + _tool_exception(tool) + pin, mk):
+            return False
+    return True
+
+
+_SG = '"semgrep==$(SEMGREP_VERSION)"'
+_ZZ = '"zizmor==$(ZIZMOR_VERSION)"'
+_CERT = '--exclude-newer-package "$(TOOL_CERTIFI_EXCEPTION)" '
+_OTHER = '--exclude-newer-package "requests=2099-01-01T00:00:00Z" '
+_CERT_LITERAL = '--exclude-newer-package "certifi=2099-01-01T00:00:00Z" '
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [(_SG, _OTHER + _SG), (_ZZ, _CERT + _ZZ), (_CERT, _CERT_LITERAL)],
+    ids=["other-package-on-semgrep", "certifi-exception-on-zizmor", "literal-instead-of-variable"],
+)
+def test_tool_cooldown_guard_rejects_exceptions_other_than_the_certifi_variable(
+    mutation: tuple[str, str],
+) -> None:
+    """INFO-14: il controllo sa fallire (mutazioni sintetiche del Makefile)."""
+    mk = _makefile()
+    assert tool_lines_comply(mk), "il Makefile reale deve essere conforme"
+    old, new = mutation
+    assert old in mk
+    assert not tool_lines_comply(mk.replace(old, new, 1))
+
+
+def test_backend_cooldown_exception_is_limited_to_certifi_and_dates_match() -> None:
+    """CR-SL00a-011 / INFO-14: solo certifi, e stessa data nel Makefile e in pyproject."""
+    import re
+
+    excl = _pyproject()["tool"]["uv"].get("exclude-newer-package", {})
+    assert set(excl) <= {"certifi"}
+    m = re.search(r"^TOOL_CERTIFI_EXCEPTION\s*:=\s*certifi=(\S+)$", _makefile(), re.M)
+    assert m
+    if excl:
+        assert excl["certifi"] == m.group(1)
+
+
+def test_precommit_hooks_use_frozen_uv_run() -> None:
+    """CR-SL00a-010: un commit non deve rifare il lock né sincronizzare l'ambiente."""
+    cfg = (REPO / ".pre-commit-config.yaml").read_text(encoding="utf-8")
+    runs = [ln for ln in cfg.splitlines() if "uv run" in ln]
+    assert runs, "nessun hook con uv run"
+    assert all("uv run --frozen" in ln for ln in runs), runs
+
+
+def test_scan_deps_cleans_up_even_when_pip_audit_fails() -> None:
+    """CR-SL00a-009: con `-e` il `rc=$$?; rm` non gira mai; serve `trap` o `|| rc=`."""
+    mk = _makefile()
+    body = mk.split("scan-deps:", 1)[1].split("\n\n", 1)[0]
+    assert "trap " in body or "|| rc=" in body or "mktemp" in body
+    assert not ("rc=$$?" in body and "trap " not in body and "|| rc=" not in body)
+
+
+def test_pull_request_target_guard_matches_every_form_of_the_trigger() -> None:
+    """CR-SL00a-013: il grep di ci.yml deve riconoscere anche `on: pull_request_target`."""
+    import re
+    import subprocess
+
+    ci = (REPO / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    pattern = re.search(r"grep -RnE '([^']*pull_request_targe[^']*)'", ci)
+    assert pattern, "controllo pull_request_target non trovato in ci.yml"
+    samples = [
+        "on: pull_request_target",
+        "on: [push, pull_request_target]",
+        "  pull_request_target:",
+        "on:\n  pull_request_target:\n    branches: [main]",
+    ]
+    for sample in samples:
+        found = subprocess.run(  # noqa: S603
+            ["grep", "-E", pattern.group(1)],  # noqa: S607
+            input=sample,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert found.returncode == 0, f"non riconosciuto: {sample!r}"
+
+
 def test_scan_tools_installed_with_pinned_version_and_cooldown() -> None:
     """SEC-SL00a-003: semgrep/zizmor fissati, con cooldown, una sola fonte (Makefile)."""
     import re
@@ -58,8 +153,7 @@ def test_scan_tools_installed_with_pinned_version_and_cooldown() -> None:
         assert re.search(rf"^{tool.upper()}_VERSION\s*:=\s*\d+\.\d+\.\d+$", mk, re.M)
         pin = rf'"{tool}==\$\({tool.upper()}_VERSION\)"'
         head = r'tool install --force --exclude-newer "\$\(TOOL_COOLDOWN\)" '
-        optional_exception = r'(?:--exclude-newer-package "[^"]+" )?'
-        assert re.search(head + optional_exception + pin, mk)
+        assert re.search(head + _tool_exception(tool) + pin, mk)
 
 
 def test_ci_does_not_install_tools_outside_makefile() -> None:

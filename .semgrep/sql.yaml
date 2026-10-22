@@ -2,23 +2,52 @@ rules:
   - id: menu-sqlalchemy-text-formatted
     languages: [python]
     severity: ERROR
-    message: "text() con f-string, format o concatenazione: usare parametri vincolati (THR-025)."
+    message: "text()/literal_column()/exec_driver_sql() ammettono solo un letterale stringa non formattato: usare parametri vincolati (THR-025)."
     pattern-either:
-      - pattern: $F.text(f"...")
+      # f-string: "..." li considera letterali, quindi vanno elencati a parte.
       - pattern: text(f"...")
-      - pattern: text("...".format(...))
-      - pattern: $F.text("...".format(...))
-      - pattern: text($A + $B)
-      - pattern: text("..." % ...)
+      - pattern: sa.text(f"...")
+      - pattern: sqlalchemy.text(f"...")
+      - pattern: literal_column(f"...")
+      - pattern: sa.literal_column(f"...")
+      - pattern: sqlalchemy.literal_column(f"...")
+      - pattern: $C.exec_driver_sql(f"...")
+      # Tutto cio' che non e' un letterale stringa semplice (variabile, concatenazione, format, %).
+      - patterns:
+          - pattern-either:
+              - pattern: text(...)
+              - pattern: sa.text(...)
+              - pattern: sqlalchemy.text(...)
+              - pattern: literal_column(...)
+              - pattern: sa.literal_column(...)
+              - pattern: sqlalchemy.literal_column(...)
+              - pattern: $C.exec_driver_sql(...)
+          - pattern-not: text("...")
+          - pattern-not: sa.text("...")
+          - pattern-not: sqlalchemy.text("...")
+          - pattern-not: literal_column("...")
+          - pattern-not: sa.literal_column("...")
+          - pattern-not: sqlalchemy.literal_column("...")
+          - pattern-not: $C.exec_driver_sql("...")
   - id: menu-set-config-session-scope
     languages: [generic]
     severity: ERROR
-    message: "set_config(..., false) o SET di sessione vietati: solo SET LOCAL / set_config(..., true) nella transazione (THR-025, SR-042)."
-    pattern-regex: (?i)set_config\s*\([^)]*,\s*false\s*\)|\bSET\s+(?!LOCAL\b)(SESSION\s+)?(app\.|role\b|search_path\b)
+    message: "set_config(..., false) o SET/RESET di sessione vietati ovunque: solo SET LOCAL / set_config(..., true) nella transazione (THR-025, THR-027, SR-042)."
+    pattern-regex: (?i)\bset_config\s*\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*,\s*\(*\s*(?:false|'(?:f|false|off|no|n|0)'|"(?:f|false|off|no|n|0)")\s*\)*\s*\)|\b(?:SET|RESET)\s+(?!LOCAL\b)(?:SESSION\s+)?(?:app\.|role\b|search_path\b|authorization\b|all\b)
     paths:
       exclude:
         - "**/tests/"
         - "**/.semgrep/"
+  - id: menu-set-config-outside-tenancy
+    languages: [generic]
+    severity: ERROR
+    message: "Il contesto di famiglia si imposta solo in menu.tenancy (family_tx): nessun set_config( altrove nel codice dell'app (THR-027, SR-042)."
+    pattern-regex: (?i)\bset_config\s*\(
+    paths:
+      include:
+        - "**/backend/src/"
+      exclude:
+        - "**/backend/src/menu/tenancy/"
   - id: menu-sqlalchemy-session-outside-tenancy
     languages: [python]
     severity: ERROR
@@ -27,6 +56,15 @@ rules:
       - pattern: Session(...)
       - pattern: sessionmaker(...)
       - pattern: create_engine(...)
+      - pattern: create_async_engine(...)
+      - pattern: AsyncSession(...)
+      - pattern: async_sessionmaker(...)
+      - pattern: $M.Session(...)
+      - pattern: $M.sessionmaker(...)
+      - pattern: $M.create_engine(...)
+      - pattern: $M.create_async_engine(...)
+      - pattern: $M.AsyncSession(...)
+      - pattern: $M.async_sessionmaker(...)
     paths:
       include:
         - "**/backend/src/"

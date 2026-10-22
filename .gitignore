@@ -26,3 +26,6 @@ web/dist/
 .idea/
 .vscode/
 .pip-audit-requirements.txt
+
+# Certificati e password usa e getta del PostgreSQL locale (scripts/dev-certs.sh)
+db/dev-certs/

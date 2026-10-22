@@ -4,10 +4,10 @@
 |---|---|
 | Created | 2026-10-17 |
 | Current phase | P5 Build |
-| Last update | 2026-10-21 |
+| Last update | 2026-10-22 |
 | Automatic commit at end of slice | yes (local only; every push needs the user's explicit consent) |
 | Remote | https://github.com/mrclttnz/menu-design (private, created by the user 2026-10-19); run gitleaks on full history before the first push |
-| Git | repository initialized 2026-10-17, no commits yet |
+| Git | repository initialized 2026-10-17, branch main, local commits only |
 | User profile | Experienced developer; knows Python, TypeScript/JavaScript, SQL/PostgreSQL |
 | Missing tools (P-0, block SL-00a) | Docker WSL integration, uv, pnpm, psql; gitleaks (`go install github.com/gitleaks/gitleaks/v8@latest` or release binary), semgrep (`pipx install semgrep`), trivy (`sudo apt install trivy` via Aqua repo, or release binary), osv-scanner (`go install github.com/google/osv-scanner/v2/cmd/osv-scanner@latest`) |
 
@@ -26,7 +26,7 @@
 | ID | Goal | Status (TODO / IN PROGRESS / DONE) | Git base | Code review | Security review | Date |
 |---|---|---|---|---|---|---|
 | SL-00a | Repo, backend skeleton, CI with lint, tests, blocking scans | DONE | 44a5a03 | docs/reviews/SL-00a-code.md (APPROVED, 6 fixed) | docs/reviews/SL-00a-security.md (0 open BLOCKER, 5 fixed) | 2026-10-21 |
-| SL-00b | Local DB, migration 0001, tenancy, DB inventories, container | TODO | | | | |
+| SL-00b | Local DB, migration 0001, tenancy, DB inventories, container | DONE | 022cb46 | docs/reviews/SL-00b-code.md (APPROVED, 5 fixed) | docs/reviews/SL-00b-security.md (APPROVED, 3 fixed) | 2026-10-22 |
 | SL-01 | Web shell, i18n, generated client | TODO | | | | |
 | SL-02 | Console bootstrap, security log, first RLS check | TODO | | | | |
 | SL-03a | Google login, sessions, CSRF, logout | TODO | | | | |
@@ -91,6 +91,12 @@
 | SEC-SL00a INFO-14 | Tool-install cooldown test accepts exceptions for any package; restrict to the certifi variable | INFO | SL-00b |
 | CR-SL00a-007..013 | Body-size guard fail-open branch (not exploitable on HTTP/1.1), untested platform branches, dead code in `scan-deps`, pre-commit `uv run` without `--frozen`, `make help` wording, unused `_PROBLEM_REF` in factory.py, uvicorn access-log/correlation_id notes (details in code review report) | LOW | SL-00b / SL-01 |
 | SL-00a note | 415 on every unsafe method without `Content-Type: application/json`, even with no body: frontend must send it (SL-01, SL-03a); CSP `style-src 'self'` may need review in SL-01 | INFO | SL-01 |
+| SEC-SL00b-004 | Test harness sets a published role password on any `MENU_TEST_PG_HOST`: refuse non-loopback hosts without explicit opt-in | LOW | SL-02 |
+| SEC-SL00b-005 | Image keeps 11 setuid/setgid binaries (add `chmod a-s`); 44 unfixed HIGH OS CVEs reported by trivy | LOW | SL-10b |
+| SEC-SL00b-006 | Standard-library loggers (sqlalchemy, `uvicorn.error`) bypass structlog redaction | LOW | SL-01 |
+| SEC-SL00b-007 | gitleaks allowlist of `db/dev-certs/` hides force-added files: add `git ls-files db/dev-certs` empty check | LOW | SL-00b follow-up / SL-10b |
+| CR-SL00b-005..008, 010..013 | Seed guard checks only the `DATABASE_URL_OWNER` host (tie to the URL used, SL-10a); harness race on `menu_owner` connection limit 3; no `pool_pre_ping` (500 on first request after pooler restart); Hypothesis examples hard-coded (no ci/nightly profile); Supabase `service_role` CREATE on `public` and `extensions` (verify at P-4, add to bootstrap revoke list); `make dev` starts only the DB; unqualified `now()` in `now_utc` body (accepted, D1); keep `last-modified-files.sh` out of commits | LOW/INFO | SL-02 / SL-10a / P-4 |
+| SL-00b notes | From SL-02 `tenancy` must offer a way to set `app.correlation_id` (semgrep bans `set_config(` outside tenancy); 0008+ SECURITY DEFINER needs `SET search_path` (semgrep rule exception); 05-data §3.1/§11.1 and ADR-0014 to align (backup default SELECT, CREATE revoked from `public` owner, Supabase ADMIN-only membership, non-inlinable search_path trade-off); 08 §6.7 INLINABLE list split allowed (7) / expected now (4); CI workflow (postgres TLS service, container job) not yet run on GitHub (no push consent) | INFO | before first push |
 | SL-00a note | docs/07-plan.md and 08-test-strategy mention semgrep 1.181.0 / zizmor 1.31.1; Makefile pins 1.180.0 / 1.30.1; docs-only CI path filter (plan §6.3) not yet implemented | INFO | before first push |
 
 ## Log
@@ -155,3 +161,4 @@
 - 2026-10-20 · tech-lead · development plan v3 final touch-ups: OBJ-16 (make full local only, staging checks only in make prerelease), OBJ-17 (blocking rule for slices without API), closed I-P3, I-P13 and §11.3 items (already_in_family auth outcome, params.units[] with reason, course_in_use); no open items left · docs/07-plan.md
 - 2026-10-20 · orchestrator · gate G4 approved by the user; Q-031 (a); staging defaults kept; slice table filled (48 TODO); phase → P5 Build · docs/STATUS.md
 - 2026-10-21 · orchestrator, devops, tester, backend-developer, code-reviewer, security-engineer · SL-00a built: repo scaffold, FastAPI skeleton (/healthz, headers, limits, If-Match, AuthzRoute, redaction), CI with blocking scans; 312 tests; reviews: 0 BLOCKER, 11 FIX-IN-SLICE fixed in 2 cycles (incl. SEC-010); certifi cooldown exception approved by the user · docs/reviews/SL-00a-code.md, docs/reviews/SL-00a-security.md
+- 2026-10-22 · orchestrator, tester, data-architect, devops, backend-developer, code-reviewer, security-engineer · SL-00b built: PostgreSQL 17 TLS (compose, dev-certs), bootstrap.sql, Alembic env + 0001, tenancy, healthz DB probe, seed guard, Dockerfile, db/container CI tiers; 663 tests; reviews: 0 BLOCKER, 7 FIX-IN-SLICE fixed in 1 cycle; plan §6.2 amended (trivy config covers Dockerfile only) · docs/reviews/SL-00b-code.md, docs/reviews/SL-00b-security.md

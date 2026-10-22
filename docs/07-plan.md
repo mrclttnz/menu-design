@@ -682,7 +682,7 @@ Un target segnaposto (per esempio `make perf` prima che esista) fallisce con un 
 | `sast` | `semgrep` con `p/python`, `p/owasp-top-ten`, `p/typescript`, `p/react` e `.semgrep/` (divieto di `text()` con f-string o `format`, di `set_config(…, false)` e `SET` di sessione, di sessioni SQLAlchemy fuori da `tenancy`, di `now()` nudo nelle migrazioni, di `dangerouslySetInnerHTML`, di token in storage) | sì | SL-00a (regole TS attive da SL-01) |
 | `deps` | `pip-audit` (con `uv export`), `osv-scanner` su `uv.lock` (e `pnpm-lock.yaml` da SL-01), `pnpm audit --audit-level high` (da SL-01) | sì, su CVE alte o critiche senza accettazione | SL-00a |
 | `workflows` | `zizmor`; azioni fissate a SHA; `permissions: contents: read` per default; nessun `pull_request_target` | sì | SL-00a |
-| `container` | `hadolint`; `docker build`; `trivy image` (HIGH e CRITICAL con correzione); `trivy config` su Dockerfile, `compose.yaml` e workflow | sì | SL-00b |
+| `container` | `hadolint`; `docker build`; `trivy image` (HIGH e CRITICAL con correzione); `trivy config` sul Dockerfile (trivy non ha scanner per `compose.yaml` né per i workflow: i workflow sono coperti da `zizmor`, `compose.yaml` da controlli in `test_container`: porte su 127.0.0.1, nessun `privileged`) | sì | SL-00b |
 | `web` | `pnpm install --frozen-lockfile`; eslint; prettier; tsc; vitest; lingui; client generato senza differenze; `vite build`; budget del bundle ≤ 150 KB gzip | sì | SL-01 |
 | `e2e` | immagine, PostgreSQL e stub OIDC, Playwright Chromium (360 px e desktop) + axe | sì | SL-01 |
 | `nightly` | §6.3 | allarme, non blocca (CHG-018) | Lighthouse da SL-06a, dataset da SL-10a, workflow da SL-10b |

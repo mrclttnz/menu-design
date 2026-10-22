@@ -8,13 +8,13 @@ repos:
         pass_filenames: false
       - id: ruff
         name: ruff check
-        entry: bash -c 'cd backend && uv run ruff check --fix'
+        entry: bash -c 'cd backend && uv run --frozen ruff check --fix'
         language: system
         pass_filenames: false
         types: [python]
       - id: ruff-format
         name: ruff format
-        entry: bash -c 'cd backend && uv run ruff format'
+        entry: bash -c 'cd backend && uv run --frozen ruff format'
         language: system
         pass_filenames: false
         types: [python]

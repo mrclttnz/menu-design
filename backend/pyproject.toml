@@ -10,6 +10,9 @@ dependencies = [
     "pydantic",
     "pydantic-settings",
     "structlog",
+    "sqlalchemy>=2.1.4",
+    "alembic>=1.20.0",
+    "psycopg[binary]>=3.3.6",
 ]
 
 [dependency-groups]
@@ -22,6 +25,8 @@ dev = [
     "pytest-cov",
     "pytest-randomly",
     "httpx",
+    "pytest-xdist>=3.8.0",
+    "hypothesis>=6.169.1",
 ]
 
 [build-system]
@@ -70,7 +75,10 @@ exclude_dirs = ["tests"]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers --strict-config"
 markers = [
-    "db: richiede PostgreSQL",
+    "db: richiede PostgreSQL (applicato in automatico a chi usa il database di test)",
+    "integration: API su PostgreSQL reale",
+    "property: test di proprietà (Hypothesis)",
+    "container: richiede Docker (build dell'immagine)",
     "sec: test di sicurezza",
     "concurrency: test di concorrenza",
     "smoke: contro un URL (staging o produzione)",

@@ -2,8 +2,8 @@ rules:
   - id: menu-bare-now-in-migrations
     languages: [generic]
     severity: ERROR
-    message: "now(), current_timestamp, current_date, localtimestamp, transaction_timestamp() nudi vietati nelle migrazioni; usare app.now_utc() (piano §5.5)."
-    pattern-regex: (?i)(?<![\w.])(now\s*\(\s*\)|current_timestamp|current_date|localtimestamp|transaction_timestamp\s*\(\s*\))
+    message: "now(), current_timestamp, current_date, localtimestamp, transaction_timestamp() nudi vietati nelle migrazioni; usare app.now_utc() (piano §5.5). Unica eccezione - la riga NOW_UTC_BODY di 0001, corpo di app.now_utc()."
+    pattern-regex: (?i)(?<![\w.])(?<!NOW_UTC_BODY = "select )(now\s*\(\s*\)|current_timestamp|current_date|localtimestamp|transaction_timestamp\s*\(\s*\))
     paths:
       include:
         - "**/backend/migrations/versions/"

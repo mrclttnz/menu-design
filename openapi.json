@@ -29,6 +29,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "Database non raggiungibile: corpo {\"status\":\"unavailable\"}",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
           }
         },
         "x-authz": {

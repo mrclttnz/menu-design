@@ -1,12 +1,15 @@
 """`create_app`: unico punto in cui si assemblano configurazione, middleware e router."""
 
-from collections.abc import Sequence
+import time
+from collections.abc import AsyncIterator, Callable, Sequence
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import APIRouter, FastAPI
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from menu import tenancy
 from menu.app import health
 from menu.common import AppError
 from menu.platform import Settings, assert_all_routes_declare_authz, configure_logging
@@ -46,11 +49,24 @@ def _problem_json_only(app: FastAPI) -> None:
     app.openapi = openapi  # type: ignore[method-assign]
 
 
-def create_app(extra_routers: Sequence[APIRouter] = ()) -> FastAPI:
-    settings = Settings()  # APP_ENV obbligatorio: fail closed
+def create_app(
+    extra_routers: Sequence[APIRouter] = (),
+    *,
+    health_clock: Callable[[], float] = time.monotonic,
+) -> FastAPI:
+    settings = Settings()  # APP_ENV e DATABASE_URL_APP obbligatori: fail closed
     configure_logging()
 
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        tenancy.init(settings.database_url_app.get_secret_value())
+        try:
+            yield
+        finally:
+            tenancy.dispose()
+
     app = FastAPI(
+        lifespan=lifespan,
         title="Menu Design",
         version="0.1.0",
         debug=False,
@@ -60,6 +76,7 @@ def create_app(extra_routers: Sequence[APIRouter] = ()) -> FastAPI:
         responses=_PROBLEM_RESPONSE,
     )
     app.state.settings = settings
+    app.state.health = health.HealthProbe(health_clock)
     _problem_json_only(app)
 
     app.add_exception_handler(AppError, app_error_handler)

@@ -42,7 +42,28 @@ jobs:
 
   backend:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 25
+    env:
+      # Cluster di test effimero sulla VM del job: password usa e getta, porta solo su localhost.
+      # MENU_TEST_PG_ADMIN_PASSWORD impostata = cluster esterno (il Makefile non avvia compose).
+      MENU_TEST_PG_ADMIN_PASSWORD: ci-throwaway-pg-admin
+      MENU_TEST_PG_HOST: localhost
+      MENU_TEST_PG_PORT: "5432"
+      MENU_TEST_PG_CA: ${{ github.workspace }}/db/dev-certs/ca.crt
+    services:
+      postgres:
+        image: postgres:17@sha256:a63c1ea3f6a3a5a1621f97d2aba3b30faecfab4224c1b0000cc85ced57bb1939
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-throwaway-pg-admin
+        ports:
+          - 127.0.0.1:5432:5432
+        options: >-
+          --name menu-pg
+          --health-cmd "pg_isready -h 127.0.0.1 -U postgres"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -52,12 +73,57 @@ jobs:
           version: ${{ env.UV_VERSION }}
           python-version: "3.14"
           enable-cache: false
+      - name: TLS for the PostgreSQL service (the app enforces verify-full)
+        run: ./scripts/ci-pg-tls.sh menu-pg
       - name: Lint, format, mypy, bandit
         run: make lint
       - name: Unit and architecture tests
         run: make test-unit
       - name: Contract tests
         run: make test-contract
+      - name: Database tests and migrations
+        run: make test-db
+      - name: Integration tests
+        run: make test-int
+      - name: Security tests
+        run: make test-sec
+      - name: Property tests (ci-small)
+        run: make test-prop
+      - name: Concurrency tests (x3)
+        run: make test-conc
+
+  container:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      HADOLINT_VERSION: "2.15.1"
+      HADOLINT_SHA256: "c7187db94eeeeca956519a6af171adc31453941a1e777961f6e680f697c8c507"
+      TRIVY_VERSION: "0.76.0"
+      TRIVY_SHA256: "e24b1c51293c1b15e4ba8d45bbc7891ba053f90278ec2698f3562c993e145fe7"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.14"
+          enable-cache: false
+      - name: Install hadolint
+        run: |
+          curl -fsSL -o hadolint "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-linux-x86_64"
+          echo "${HADOLINT_SHA256}  hadolint" | sha256sum -c -
+          sudo install -m 0755 hadolint /usr/local/bin/hadolint
+          rm -f hadolint
+      - name: Install trivy
+        run: |
+          curl -fsSL -o trivy.tgz "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          echo "${TRIVY_SHA256}  trivy.tgz" | sha256sum -c -
+          tar -xzf trivy.tgz trivy
+          sudo install -m 0755 trivy /usr/local/bin/trivy
+          rm -f trivy trivy.tgz
+      - name: hadolint, build, trivy image and config, image tests
+        run: make tier-container
 
   sast:
     runs-on: ubuntu-24.04
@@ -118,6 +184,6 @@ jobs:
           if grep -RnE '^\s*-?\s*uses:\s*[^./][^@]*@' .github/workflows | grep -vE '@[0-9a-f]{40}(\s|$)'; then
             echo "ERRORE: azione non fissata a SHA" >&2; exit 1
           fi
-          if grep -RnE '^\s*(on:.*)?pull_request_targe[t]\s*:' .github/workflows; then
+          if grep -RnE '(^|[^A-Za-z_])pull_request_targe[t]($|[^A-Za-z_])' .github/workflows; then
             echo "ERRORE: trigger vietato" >&2; exit 1
           fi

@@ -1,0 +1,61 @@
+# PostgreSQL 17 locale per sviluppo e test (SL-00b). Solo dati sintetici.
+# Avvio: `make dev` (genera i certificati con scripts/dev-certs.sh). Porta host: MENU_PG_HOST_PORT.
+name: menu-design
+
+services:
+  postgres:
+    # Indice multi-architettura di postgres:17, fissato per digest (SR-076); aggiornare con il
+    # digest corrente di `docker buildx imagetools inspect postgres:17`.
+    image: postgres:17@sha256:a63c1ea3f6a3a5a1621f97d2aba3b30faecfab4224c1b0000cc85ced57bb1939
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${MENU_PG_HOST_PORT:-5432}:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_admin_password
+    secrets:
+      - pg_admin_password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/dev-certs:/certs:ro
+    # La chiave TLS deve appartenere a `postgres` con permessi 0600: copia dal bind mount.
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        install -d -m 0700 -o postgres -g postgres /tls
+        install -m 0644 -o postgres -g postgres /certs/server.crt /tls/server.crt
+        install -m 0600 -o postgres -g postgres /certs/server.key /tls/server.key
+        exec docker-entrypoint.sh "$$@"
+      - sh
+    command:
+      - postgres
+      - -c
+      - ssl=on
+      - -c
+      - ssl_cert_file=/tls/server.crt
+      - -c
+      - ssl_key_file=/tls/server.key
+      - -c
+      - ssl_min_protocol_version=TLSv1.3
+      - -c
+      - max_connections=200
+      # Cluster di sviluppo e test, ricreabile: durabilita' ridotta per velocita'.
+      - -c
+      - fsync=off
+      - -c
+      - synchronous_commit=off
+    shm_size: 256mb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+secrets:
+  pg_admin_password:
+    file: ./db/dev-certs/admin-password
+
+volumes:
+  pgdata:

@@ -4,9 +4,10 @@ title = "menu-design"
 useDefault = true
 
 [allowlist]
-description = "Ambienti virtuali e cache"
+description = "Ambienti virtuali, cache e certificati locali usa e getta"
 paths = [
   '''(^|/)\.venv/''',
   '''(^|/)node_modules/''',
   '''(^|/)\.(mypy|ruff|pytest)_cache/''',
+  '''(^|/)db/dev-certs/''',  # certificati e password usa e getta, ignorati da git
 ]

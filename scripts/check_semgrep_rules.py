@@ -16,7 +16,14 @@ REPO = Path(__file__).resolve().parent.parent
 
 SESSION = "from sqlalchemy import create_engine\ncreate_engine('postgresql://x')\n"
 SET_CFG = "q = \"select set_config('app.tenant_id', 'x', false)\"\n"
+SET_CFG_TRUE = "q = \"select set_config('app.family_id', cast(:f as text), true)\"\n"
+SET_CFG_NESTED = "q = \"select set_config('app.family_id', cast(:f as text), false)\"\n"
 NOW = 'op.execute("insert into t values (now())")\n'
+NOW_ALLOWED = 'NOW_UTC_BODY = "select now()"  # allow-bare-now: corpo di app.now_utc()\n'
+NOW_OTHER = 'OTHER = "select now()"\n'
+
+ASYNC = "from sqlalchemy.ext.asyncio import create_async_engine\ncreate_async_engine('postgresql+psycopg://x')\n"
+TEXT_VAR = "q = f'select {x}'\ntext(q)\n"
 
 # percorso relativo -> (contenuto, regole attese)
 CASES: dict[str, tuple[str, set[str]]] = {
@@ -24,10 +31,21 @@ CASES: dict[str, tuple[str, set[str]]] = {
     "backend/src/menu/tenancy/db.py": (SESSION, set()),
     "backend/src/menu/console_client/db.py": (SESSION, set()),
     "backend/tests/unit/test_x.py": (SESSION, set()),
-    "backend/src/menu/orders/cfg.py": (SET_CFG, {"menu-set-config-session-scope"}),
+    "backend/src/menu/orders/async_repo.py": (ASYNC, {"menu-sqlalchemy-session-outside-tenancy"}),
+    "backend/src/menu/tenancy/async_db.py": (ASYNC, set()),
+    "backend/src/menu/orders/text_var.py": (TEXT_VAR, {"menu-sqlalchemy-text-formatted"}),
+    "backend/src/menu/orders/cfg.py": (
+        SET_CFG,
+        {"menu-set-config-session-scope", "menu-set-config-outside-tenancy"},
+    ),
+    "backend/src/menu/orders/cfg_true.py": (SET_CFG_TRUE, {"menu-set-config-outside-tenancy"}),
+    "backend/src/menu/tenancy/cfg_true.py": (SET_CFG_TRUE, set()),
+    "backend/src/menu/tenancy/cfg_nested.py": (SET_CFG_NESTED, {"menu-set-config-session-scope"}),
     "backend/tests/unit/test_cfg.py": (SET_CFG, set()),
     "backend/migrations/versions/0001_x.py": (NOW, {"menu-bare-now-in-migrations"}),
     "backend/src/menu/orders/now.py": (NOW, set()),
+    "backend/migrations/versions/0001_allowed.py": (NOW_ALLOWED, set()),
+    "backend/migrations/versions/0002_y.py": (NOW_OTHER, {"menu-bare-now-in-migrations"}),
 }
 
 
