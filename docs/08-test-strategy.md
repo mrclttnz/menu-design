@@ -603,6 +603,9 @@ Vedi la riga "Periodico" sopra. Il risultato Lighthouse notturno non blocca null
 ### 18.4 Manuale
 Accessibilità con lettori di schermo, usabilità (NFR-012b), Safari iOS, ripristino reale trimestrale, checklist di processo. Il tester prepara script e checklist; l'utente o il devops eseguono e registrano l'esito.
 
+### 18.5 Prova manuale della shell
+`make run-web` builda la SPA (con il controllo del budget) e la serve con FastAPI su `http://127.0.0.1:8000/` (porta con `WEB_PORT=...`). Usa un database fittizio, come la configurazione Playwright: serve a vedere shell, navigazione e i18n, non le route che leggono dati. Non fa parte di nessun livello di `make ci`.
+
 ## 19. Strumenti mancanti in locale (verificato il 2026-10-19)
 
 | Strumento | Serve a | Stato | Effetto sulle evidenze | Rimedio |

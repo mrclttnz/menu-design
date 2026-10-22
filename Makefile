@@ -45,14 +45,14 @@ if [ -z "$${MENU_TEST_PG_ADMIN_PASSWORD:-}" ]; then \
 fi
 endef
 
-.PHONY: help sync dev db-up db-down db-reset dev-certs tier-db tier-container tier-web web-install web-build lint lint-py lint-web test test-web test-unit test-db test-int test-sec test-prop \
+.PHONY: help sync dev db-up db-down db-reset dev-certs tier-db tier-container tier-web web-install web-build run-web lint lint-py lint-web test test-web test-unit test-db test-int test-sec test-prop \
         test-conc test-contract e2e lighthouse perf smoke dast scan scan-secrets scan-sast \
         scan-deps scan-workflows scan-web scan-container scan-rules tools-semgrep tools-zizmor ci nightly full prerelease openapi seed
 
 help:
 	@echo "Target attivi: sync dev db-up db-down db-reset lint test test-unit test-contract"
 	@echo "        test-db test-int test-sec test-prop test-conc scan scan-container ci"
-	@echo "        lint-web test-web web-build scan-web tier-web e2e"
+	@echo "        lint-web test-web web-build run-web scan-web tier-web e2e"
 	@echo "        (db e container sono livelli di 'make ci' da SL-00b; 'make dev' avvia PostgreSQL 17 con TLS;"
 	@echo "         web ed e2e da SL-01: pnpm da corepack, Chromium via 'pnpm exec playwright install chromium')"
 	@echo "Segnaposto ('disponibile da SL-xx', falliscono se chiamati):"
@@ -101,6 +101,16 @@ lint-web: web-install
 web-build: web-install
 	$(PNPM) run build
 	$(PNPM) run budget
+
+# Prova manuale della shell: builda la SPA e la serve con FastAPI su http://127.0.0.1:$(WEB_PORT)/.
+# Database fittizio (la shell non lo tocca, come in playwright.config.ts): le route con dati falliscono.
+WEB_PORT ?= 8000
+DUMMY_DB_URL = postgresql+psycopg://menu_app:$(DUMMY_DB_PW)@localhost:1/menu?sslmode=verify-full&sslrootcert=/nonexistent/ca.crt
+DUMMY_DB_PW  = dummy-run-web-never-connected
+run-web: web-build sync
+	cd $(BACKEND) && APP_ENV=test TRUSTED_PROXY_HOPS=0 WEB_DIST_DIR="$(CURDIR)/$(WEB)/dist" \
+	  DATABASE_URL_APP='$(DUMMY_DB_URL)' \
+	  $(UV) run --frozen python -m menu serve --host 127.0.0.1 --port $(WEB_PORT)
 
 # --- test -----------------------------------------------------------------
 test: test-unit test-web tier-db test-contract
