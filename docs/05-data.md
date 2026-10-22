@@ -1,6 +1,14 @@
 # Modello dei dati: Menu Design
 
-> Documento di proprietà del data-architect. Versione 5, 2026-10-19. **Stato: APPROVATO al gate G3** (2026-10-19, versione 4). La versione 5 contiene le correzioni per il gate G4, da approvare con il piano.
+> Documento di proprietà del data-architect. Versione 6, 2026-10-22. **Stato: APPROVATO al gate G3** (2026-10-19, versione 4). La versione 5 contiene le correzioni per il gate G4, da approvare con il piano. La versione 6 contiene le correzioni emerse dalla prima esecuzione reale del DDL (SL-02).
+>
+> **Novità della versione 6** (2026-10-22, SL-02: migrazioni `0002`-`0004` eseguite su PostgreSQL 17, con `upgrade`, `downgrade -1` e `base ↔ head` per ogni revisione):
+> - **Testi con lunghezza massima come `text` + `CHECK`**, non `varchar(n)`: `family.name`, `person.display_name`, `course.name` (e d'ora in poi i nomi e le note delle tabelle future). Con `varchar(n)` un valore troppo lungo dà `string_data_right_truncation` (22001) *prima* del `CHECK`, quindi senza il nome del vincolo; con `text` l'errore è sempre `check_violation` (23514) con il nome del vincolo, che l'app traduce in modo uniforme. I `CHECK` sono scritti come `char_length(x) BETWEEN 1 AND n AND btrim(x) <> ''` (il solo `char_length(btrim(x)) BETWEEN 1 AND n` ammetteva valori lunghi con spazi). `security_event.event_type` e `target_type` restano `varchar` (non sono testi dell'utente).
+> - **Scadenze in ore, non in giorni** (sezione 11.1): `timestamptz + interval '7 days'` dipende dal `TimeZone` della sessione nei giorni del cambio dell'ora legale (7 giorni "di calendario" a Roma possono essere 167 o 169 ore). I `CHECK` di uguaglianza sulle scadenze (`family_bootstrap`, `family.deletion_due_at`, `invite`, `creation_code`, `family_notice`) e le scadenze scritte dalle funzioni usano `interval '168 hours'` (7 giorni), `'720 hours'` (30 giorni), `'24 hours'`. Le soglie con disuguaglianza (policy di `session`) possono restare in giorni: lo scarto massimo è un'ora.
+> - `family_bootstrap`: l'hash c'è **se e solo se** il bootstrap non è riscattato (`ck_family_bootstrap_hash_until_redeemed`), `redeemed_at` e `redeemed_person_id` sono valorizzati insieme. Niente `UQ (family_id, id)`: `UQ (family_id)` basta e nessuna FK punta al bootstrap.
+> - `security_event`: il trigger d'immutabilità ammette sulla colonna `ip` solo il troncamento a /24 o /48 o l'azzeramento (sezione 4.1). `console_security_events` restituisce una tabella esplicita con l'IP troncato, non `setof security_event` (sezione 3.3).
+> - Funzioni della console di M0: nomi degli eventi, errori sollevati con `invalid_parameter_value` (22023) e `p_limit` tra 1 e 1000 (sezione 3.3).
+> - Sequenza delle migrazioni allineata al piano (§12). Verificato con test: `ON DELETE NO ACTION` con cascata dalla famiglia (sezione 4).
 >
 > **Novità della versione 5** (2026-10-19, gate G4):
 > - **CHG-020:** il login con email e password esce da M2. `password_credential`, `account_token`, `rate_block`, `account.status` e l'unicità parziale su `lower(email)` sono **rinviati** (sezione 4.3, che conserva il disegno). `auth_provider` ammette solo `google`.
@@ -56,7 +64,7 @@
 >
 > Fonti: `docs/02-requirements.md` (v2, approvato G2, con CHG-001 … CHG-020), `docs/01-vision.md` (rev. 7), `docs/04-architecture.md` (v6), ADR-0001 … ADR-0016, `docs/07-plan.md` §11.2, `docs/08-test-strategy.md` (v2), `security-standard.md` di Bottega (§3, §7, §8).
 >
-> **Stato di verifica:** il DDL e le funzioni descritti qui **non sono stati eseguiti** su un database. La validazione (migrazioni applicate e annullate su PostgreSQL 17, test di RLS, privilegi e funzioni) avviene nella prima slice, secondo la sezione "Migrazioni". Anche le stime di spazio sono analitiche e vanno misurate (vedi "Stima dello spazio").
+> **Stato di verifica:** **eseguiti e verificati su PostgreSQL 17** (SL-02, migrazioni `0002`-`0004`): `family`, `family_default_meal`, `person`, `family_bootstrap`, `course`, i loro trigger e policy, `app.family_today()`, `security_event` e le funzioni `console_bootstrap_family`, `console_security_events`, `console_audit_note`. Il resto del DDL e delle funzioni **non è ancora stato eseguito**: lo verifica la slice che lo crea, e le correzioni tornano qui. Le stime di spazio sono analitiche e vanno misurate (vedi "Stima dello spazio").
 >
 > Convenzioni:
 > - schema applicativo `app`, estensioni nello schema `extensions` (convenzione Supabase);
@@ -272,16 +280,21 @@ Sono 18 funzioni fino a M1 e 21 con M2. Il conteggio è più alto della stima di
 
 | Funzione | Mx | Firma (ritorno) | Comportamento |
 |---|---|---|---|
-| `console_bootstrap_family` | M0 | `(p_family_name text, p_email_sha256 bytea) → uuid` | Valida la lunghezza del nome (1-60) e la lunghezza dell'hash (`octet_length = 32`). Crea `family` (fuso `Europe/Rome`, `frozen_through` = oggi locale − 1), i pasti di default (Pranzo e Cena, ASM-063), le 8 portate base e `family_bootstrap` con `email_sha256` e scadenza a 7 giorni. Restituisce l'ID della famiglia. |
+| `console_bootstrap_family` | M0 | `(p_family_name text, p_email_sha256 bytea) → uuid` | Valida la lunghezza del nome (1-60, non solo spazi) e la lunghezza dell'hash (`octet_length = 32`). Crea `family` (fuso `Europe/Rome`, `frozen_through` = oggi locale − 1), i pasti di default (Pranzo e Cena, ASM-063), le 8 portate base e `family_bootstrap` con `email_sha256` e scadenza a 168 ore. Nessuna `person`: l'Amministratore nasce al riscatto (SL-03a). Nessun vincolo di unicità sull'hash: due bootstrap per la stessa email sono due famiglie. Evento `console.family_bootstrap` con `family_id` e `target_type='family'`. Restituisce l'ID della famiglia. |
 | `console_issue_code` | M2 | `(p_code_hash bytea) → uuid` | Prende `pg_advisory_xact_lock`. Rifiuta se esistono già 20 codici `active` non scaduti (SR-063). Il segreto lo genera la CLI: al database arriva solo l'hash. |
 | `console_list_codes` | M2 | `() → setof (id, status, created_at, expires_at, status_changed_at)` | Nessun dato di famiglia (AC-036.4). |
 | `console_revoke_code` | M2 | `(p_code_id uuid) → boolean` | `active` → `revoked`. |
 | `console_recover_admin` | M1 | `(p_email_sha256 bytea, p_request_ref text) → text` (solo esito) | Vedi sotto. |
 | `console_enqueue_export` | M1 | `(p_email_sha256 bytea, p_scope text, p_request_ref text) → (outcome text, job_id uuid)` | Vedi sotto. |
 | `console_export_status` | M1 | `(p_job_id uuid) → (status, created_at, finished_at, last_error_code)` | |
-| `console_security_events` | M0 | `(p_since timestamptz, p_limit int ≤ 1000) → setof security_event` | Restituisce solo identificativi e codici. |
+| `console_security_events` | M0 | `(p_since timestamptz, p_limit integer) → TABLE (id, occurred_at, event_type, outcome, actor_kind, actor_account_id, actor_role, family_id, target_type, target_id, ip, correlation_id, details)` | Restituisce solo identificativi e codici, ordinati per (`occurred_at`, `id`), dal più vecchio, da `p_since` incluso. **L'IP è sempre troncato** a /24 (IPv4) o /48 (IPv6) (ADR-0011, SR-051), anche nei primi 90 giorni. `p_since` obbligatorio, `p_limit` tra 1 e 1000. Evento `console.security_log` (dettagli `since`, `limit`), scritto **dopo** la lettura: non compare nel proprio output. Tabella esplicita e non `setof security_event`: il tipo di ritorno non cambia se il registro riceve nuove colonne. |
 | `console_revoke_all_sessions` | M1 | `(p_reason_ref text) → bigint` | `DELETE FROM session`. Restituisce il numero di sessioni revocate (SR-053). |
-| `console_audit_note` | M0 | `(p_ref text) → void` | Registra un accesso diretto al database (ASM-045). |
+| `console_audit_note` | M0 | `(p_ref text) → void` | Registra un accesso diretto al database (ASM-045): evento `console.audit_note` con `details = {"request_ref": …}`. Un `request_ref` non valido **solleva** l'errore (nessun evento), a differenza delle funzioni di M1 che restituiscono l'esito `invalid_request_ref`. |
+
+**Errori e eventi delle funzioni di M0** (verificati in SL-02):
+- un argomento non valido solleva `invalid_parameter_value` (SQLSTATE 22023). Il messaggio nomina il parametro ma non ne ripete mai il valore (niente email, hash o nomi nei log del job). La transazione fallisce e non lascia righe, nemmeno l'evento;
+- ogni chiamata riuscita scrive **esattamente un** evento `console.<comando>` con `actor_kind='platform_operator'`, `outcome='success'` e `correlation_id` letto da `app.correlation_id` (`NULL` se il job non lo imposta);
+- nessun evento contiene l'email o il suo hash (I-01).
 
 **Formato di `request_ref`** (A-08), comune a recupero ed esportazione: `^[A-Z]{2,5}-[0-9]{8}-[0-9]{1,3}$` (ADR-0011), per esempio `REC-20261103-1`. È un codice di pratica, senza dati personali. Lo controlla la funzione, che con un formato non valido restituisce `invalid_request_ref` senza fare nulla.
 
@@ -344,7 +357,7 @@ Notazione: **PK** chiave primaria, **UQ** unico, **FK** chiave esterna, **CK** c
 
 **Regola `ON DELETE`:**
 - `CASCADE` dalla famiglia verso tutte le sue tabelle (eliminazione definitiva) e dal "contenitore" verso le sue parti (piatto → fonti, portate e tag; pasto → voci);
-- `NO ACTION` sui riferimenti storici (persona, piatto e portata usati in un pasto). Il controllo avviene a fine istruzione, quindi la cascata dalla famiglia, che cancella genitori e figli nella stessa istruzione, è ammessa. La cancellazione isolata di un oggetto ancora referenziato invece è rifiutata. **Da verificare con un test nella prima slice.**
+- `NO ACTION` sui riferimenti storici (persona, piatto e portata usati in un pasto). Il controllo avviene a fine istruzione, quindi la cascata dalla famiglia, che cancella genitori e figli nella stessa istruzione, è ammessa. La cancellazione isolata di un oggetto ancora referenziato invece è rifiutata. **Verificato in SL-02** (`tests/db/test_family_schema.py`): con `family.deletion_requested_by` e `family_bootstrap.redeemed_person_id` che puntano a una persona, `DELETE FROM family` (anche da `menu_app` nel contesto) cancella tutto, mentre `DELETE FROM person` isolato dà `foreign_key_violation`.
 - `RESTRICT` dove il database deve imporre una procedura, per esempio non si cancella un account con una `person` attiva.
 
 ### 4.1 Tabelle non di famiglia
@@ -358,7 +371,7 @@ Notazione: **PK** chiave primaria, **UQ** unico, **FK** chiave esterna, **CK** c
 | email | varchar(254) | no | | CK lunghezza ≤ 254 e formato minimo | Email verificata di Google, aggiornata a ogni login. **Non** unica: l'identità è il `sub`, non l'email (SR-033). L'unicità parziale su `lower(email)` è rinviata con FR-002 (sezione 4.3). |
 | email_sha256 | bytea | sì | | CK `octet_length(email_sha256) = 32`. **Non** unico. | Scritto dal servizio con `menu.common.email_sha256` alla creazione e a ogni cambio dell'email. Serve solo alle funzioni della console (recupero, esportazione), che lo confrontano con l'hash ricevuto. Nessun indice: circa 250 righe. Non è unico perché l'email non è unica: Google può riassegnare un indirizzo a un nuovo account (nuovo `sub`, per esempio un account Workspace ricreato), e il vecchio account resta finché non viene eliminato. Le funzioni della console trattano il caso come `not_eligible`. Se FR-002 viene ripreso, si aggiunge il caso di un account Google e uno con password con lo stesso indirizzo (SR-034). |
 | email_verified_at | timestamptz | sì | | | Istante del login con `email_verified=true` |
-| display_name | varchar(60) | no | | CK `char_length(btrim(display_name)) BETWEEN 1 AND 60` | Proposto da Google alla creazione, poi solo modificabile dall'utente (SR-054) |
+| display_name | text | no | | CK `char_length(display_name) BETWEEN 1 AND 60 AND btrim(display_name) <> ''` | Proposto da Google alla creazione, poi solo modificabile dall'utente (SR-054) |
 | age_declared_at | timestamptz | sì | | | Dichiarazione "ho almeno 14 anni" (SR-013). Nessuna data di nascita. È nulla solo per l'account di bootstrap fino alla prima presa visione (ASM-064). |
 | privacy_version | varchar(20) | sì | | CK coppia: entrambi nulli o entrambi valorizzati | Versione dell'informativa presa in visione (SR-056) |
 | privacy_ack_at | timestamptz | sì | | | |
@@ -422,7 +435,7 @@ Stato temporaneo di chi ha completato il login Google ma non ha ancora un accoun
 | code_hash | bytea | no | | UQ. CK `octet_length = 32` | SHA-256 del segreto di 256 bit (SR-007) |
 | status | text | no | `'active'` | CK in (`active`, `used`, `revoked`) | "Scaduto" si ricava da `expires_at` |
 | created_at | timestamptz | no | `app.now_utc()` | | |
-| expires_at | timestamptz | no | | CK `expires_at = created_at + interval '30 days'` | ASM-038 |
+| expires_at | timestamptz | no | | CK `expires_at = created_at + interval '720 hours'` | ASM-038 (30 giorni) |
 | status_changed_at | timestamptz | sì | | CK `(status='active') = (status_changed_at IS NULL)` | |
 
 Non c'è un riferimento alla famiglia creata: la console non deve collegare i codici ai contenuti, e l'evento di sicurezza `code.used` contiene già gli ID.
@@ -444,7 +457,10 @@ Non c'è un riferimento alla famiglia creata: la console non deve collegare i co
 | correlation_id | uuid | sì | | | |
 | details | jsonb | sì | | CK `pg_column_size(details) <= 1024` | Solo codici e ID (per esempio `role_before` e `role_after`). Mai segreti né contenuti (SR-021). |
 
-Immutabilità: `menu_app` ha solo `INSERT`, e un trigger `BEFORE UPDATE` rifiuta ogni modifica, salvo l'aggiornamento della sola colonna `ip` eseguito da `maint_security_log_retention()`. Le cancellazioni le fa solo `maint_security_log_retention()`.
+Immutabilità (verificata in SL-02):
+- `menu_app` ha solo `INSERT`: niente `SELECT` (quindi nemmeno `INSERT … RETURNING`), `UPDATE`, `DELETE`, `TRUNCATE`. `menu_console` nessun privilegio (legge con `console_security_events`). `menu_backup` `SELECT`. L'identità `GENERATED ALWAYS` non richiede privilegi sulla sequenza e impedisce all'app di scegliere l'`id`.
+- Il trigger `tg_security_event_immutable` (`BEFORE UPDATE`, vale anche per `menu_owner`) rifiuta ogni modifica di una colonna diversa da `ip`. Su `ip` ammette solo `NULL` oppure l'indirizzo troncato a /24 (IPv4) o /48 (IPv6) dello stesso valore (per esempio `203.0.113.77` → `203.0.113.0` o `203.0.113.0/24`): è il troncamento a 90 giorni di `maint_security_log_retention()`, che deve scrivere esattamente quel valore. Errore: `insufficient_privilege` (42501).
+- Le cancellazioni le fa solo `maint_security_log_retention()` (proprietario `menu_owner`). Il trigger non copre `TRUNCATE`, che nessun ruolo dell'app possiede.
 
 #### deletion_log (M1)
 Copia nel database del registro delle cancellazioni (SR-048). Quella autorevole dopo un ripristino è l'archivio esterno di 35 giorni (ADR-0015), perché la copia nel database torna allo stato del backup.
@@ -517,12 +533,12 @@ La RLS filtra su `id` invece che su `family_id`.
 | Campo | Tipo | Null | Default | Vincoli | Note |
 |---|---|---|---|---|---|
 | id | uuid | no | `gen_random_uuid()` | PK | |
-| name | varchar(60) | no | | CK `char_length(btrim(name)) BETWEEN 1 AND 60` | Lunghezza secondo ASM-063 |
-| timezone | text | no | `'Europe/Rome'` | Trigger `tg_family_timezone_valid`: deve esistere in `pg_timezone_names` | ADR-0009 |
+| name | text | no | | CK `char_length(name) BETWEEN 1 AND 60 AND btrim(name) <> ''` | Lunghezza secondo ASM-063 |
+| timezone | text | no | `'Europe/Rome'` | Trigger `tg_family_timezone_valid` (`BEFORE INSERT OR UPDATE OF timezone`): deve esistere in `pg_timezone_names`, altrimenti `check_violation` | ADR-0009 |
 | frozen_through | date | no | | | Ultimo giorno locale congelato (ADR-0007). Alla creazione vale oggi locale − 1. |
 | status | text | no | `'active'` | CK in (`active`, `pending_deletion`) | FR-016 (M2) |
-| deletion_requested_at | timestamptz | sì | | CK coerenza: valorizzati tutti e tre se e solo se `status='pending_deletion'` | |
-| deletion_due_at | timestamptz | sì | | CK `deletion_due_at = deletion_requested_at + interval '7 days'` | ASM-022 |
+| deletion_requested_at | timestamptz | sì | | `ck_family_deletion_coherent`: con `status='active'` tutti e tre nulli, con `status='pending_deletion'` tutti e tre valorizzati | |
+| deletion_due_at | timestamptz | sì | | CK `deletion_due_at = deletion_requested_at + interval '168 hours'` | ASM-022 (7 giorni) |
 | deletion_requested_by | uuid | sì | | FK (`id`, `deletion_requested_by`) → `person(family_id, id)` | Riferimento circolare ammesso, perché è annullabile |
 | created_at | timestamptz | no | `app.now_utc()` | | |
 
@@ -538,12 +554,12 @@ Colonna dell'apertura al pubblico: `inactivity_warned_at timestamptz NULL` (SR-0
 | Campo | Tipo | Null | Default | Vincoli | Note |
 |---|---|---|---|---|---|
 | id | uuid | no | `gen_random_uuid()` | PK | |
-| family_id | uuid | no | | UQ. FK → `family` ON DELETE CASCADE | Un solo bootstrap per famiglia |
-| email_sha256 | bytea | sì | | CK `octet_length(email_sha256) = 32`. CK `redeemed_at IS NULL OR email_sha256 IS NULL` | Hash dell'email calcolato da `menu.common.email_sha256` (sezione 3.1). L'email in chiaro non si salva. L'hash si cancella al riscatto (minimizzazione) |
+| family_id | uuid | no | | UQ. FK → `family` ON DELETE CASCADE | Un solo bootstrap per famiglia. `UQ (family_id)` rende superfluo `UQ (family_id, id)`: nessuna FK punta al bootstrap. |
+| email_sha256 | bytea | sì | | CK `octet_length(email_sha256) = 32`. `ck_family_bootstrap_hash_until_redeemed`: `(redeemed_at IS NULL) = (email_sha256 IS NOT NULL)` | Hash dell'email calcolato da `menu.common.email_sha256` (sezione 3.1). L'email in chiaro non si salva. C'è finché il bootstrap non è riscattato e si cancella al riscatto (minimizzazione). |
 | created_at | timestamptz | no | `app.now_utc()` | | |
-| expires_at | timestamptz | no | | CK `= created_at + interval '7 days'` | SR-033 |
-| redeemed_at | timestamptz | sì | | | |
-| redeemed_person_id | uuid | sì | | FK (`family_id`, `redeemed_person_id`) → `person` | |
+| expires_at | timestamptz | no | | CK `= created_at + interval '168 hours'` | SR-033 (7 giorni) |
+| redeemed_at | timestamptz | sì | | `ck_family_bootstrap_redeemed_coherent`: `(redeemed_at IS NULL) = (redeemed_person_id IS NULL)` | |
+| redeemed_person_id | uuid | sì | | FK (`family_id`, `redeemed_person_id`) → `person` NO ACTION | |
 
 Ricerca prima dell'appartenenza: `app.bootstrap_resolve(email)` (sezione 6.2).
 
@@ -554,9 +570,9 @@ Ricerca prima dell'appartenenza: `app.bootstrap_resolve(email)` (sezione 6.2).
 | family_id | uuid | no | | FK → `family` ON DELETE CASCADE | |
 | kind | text | no | | CK in (`account`, `profile`) | Resta anche nel tombstone, per distinguere "ex membro" da "persona eliminata" |
 | status | text | no | `'active'` | CK in (`active`, `former`) | `former` = tombstone |
-| account_id | uuid | sì | | FK → `account(id)` ON DELETE **RESTRICT** | Un account non si cancella finché ha una persona attiva: si passa dalla procedura della sezione 9.2 |
+| account_id | uuid | sì | | FK → `account(id)` ON DELETE **RESTRICT** (aggiunta in SL-03a con `account`; in SL-02 la colonna esiste senza FK) | Un account non si cancella finché ha una persona attiva: si passa dalla procedura della sezione 9.2 |
 | role | text | sì | | CK in (`admin`, `planner`, `member`) | |
-| display_name | varchar(60) | sì | | CK lunghezza 1-60 | **Solo per i profili.** Per gli account il nome sta in `account`. |
+| display_name | text | sì | | CK `char_length BETWEEN 1 AND 60 AND btrim <> ''` | **Solo per i profili.** Per gli account il nome sta in `account`. |
 | guardian_declared_at | timestamptz | sì | | | Dichiarazione di responsabilità genitoriale (SR-064) |
 | guardian_declared_by | uuid | sì | | FK (`family_id`, `guardian_declared_by`) → `person` | Autore come persona della famiglia |
 | joined_on | date | no | | | Data locale di ingresso o di creazione del profilo (ASM-058) |
@@ -574,7 +590,7 @@ Indice unico parziale `ux_person_account_single_family ON (account_id) WHERE acc
 
 **Invariante "almeno un Amministratore" (FR-011, SR-011):**
 - **Meccanismo primario:** l'app esegue `SELECT … FROM family WHERE id = :f FOR UPDATE` prima di ogni cambio di ruolo, uscita, rimozione o eliminazione dell'account, poi conta gli Amministratori.
-- **Difesa aggiuntiva:** `CONSTRAINT TRIGGER tg_person_admin_invariant AFTER UPDATE OR DELETE ON person DEFERRABLE INITIALLY DEFERRED`. Al commit verifica che la famiglia, se esiste ancora e ha almeno una persona collegata a un account, abbia almeno una persona `active` con `role='admin'`. Una famiglia appena creata dalla console, senza persone, non viola l'invariante.
+- **Difesa aggiuntiva:** `CONSTRAINT TRIGGER tg_person_admin_invariant AFTER UPDATE OR DELETE ON person DEFERRABLE INITIALLY DEFERRED`. Al commit verifica che la famiglia, se esiste ancora e ha almeno una persona collegata a un account (`account_id IS NOT NULL`), abbia almeno una persona `active` con `role='admin'`; altrimenti `check_violation` con vincolo `tg_person_admin_invariant`. Una famiglia appena creata dalla console, senza persone, e una famiglia di soli tombstone non violano l'invariante; la cascata dalla famiglia nemmeno. Funzione `SECURITY INVOKER`: con `menu_app` vede la famiglia del contesto, cioè quella della persona modificata. Verificato in SL-02: il passaggio di consegne (promuovere poi degradare nella stessa transazione) va a buon fine, degradare l'unico Amministratore fallisce al commit.
 
 #### invite (M1, collegamento ai profili M2)
 | Campo | Tipo | Null | Default | Vincoli | Note |
@@ -586,7 +602,7 @@ Indice unico parziale `ux_person_account_single_family ON (account_id) WHERE acc
 | linked_person_id | uuid | sì | | FK (`family_id`, `linked_person_id`) → `person` | Profilo da collegare (M2) |
 | created_by | uuid | no | | FK → `person` | |
 | created_at | timestamptz | no | `app.now_utc()` | | |
-| expires_at | timestamptz | no | | CK `= created_at + interval '7 days'` | |
+| expires_at | timestamptz | no | | CK `= created_at + interval '168 hours'` | 7 giorni |
 | status | text | no | `'pending'` | CK in (`pending`, `accepted`, `declined`, `revoked`) | "Scaduto" si ricava da `expires_at` |
 | status_changed_at | timestamptz | sì | | CK `(status='pending') = (status_changed_at IS NULL)` | |
 | accepted_person_id | uuid | sì | | FK → `person`. CK `(status='accepted') = (accepted_person_id IS NOT NULL)` | SR-044: gli Amministratori vedono chi è entrato |
@@ -604,7 +620,7 @@ Avvisi in app per la famiglia scritti dal sistema, oggi solo per il recupero del
 | kind | text | no | | CK in (`admin_recovered`) (ADR-0011) | Testo nel catalogo del client: "{nome} è diventato Amministratore tramite il supporto" (ADR-0010) |
 | subject_person_id | uuid | no | | FK (`family_id`, `subject_person_id`) → `person` NO ACTION | Il nome si risolve in lettura. Dopo un'uscita, "ex membro" (SR-047). |
 | created_at | timestamptz | no | `app.now_utc()` | | |
-| expires_at | timestamptz | no | | CK `expires_at = created_at + interval '30 days'` | Dopo 30 giorni l'avviso sparisce. Resta l'evento nella cronologia (`change_event`, FR-064). |
+| expires_at | timestamptz | no | | CK `expires_at = created_at + interval '720 hours'` | Dopo 30 giorni l'avviso sparisce. Resta l'evento nella cronologia (`change_event`, FR-064). |
 
 Indice: `ix_family_notice_family (family_id, created_at)` per gli avvisi attivi mostrati a ogni apertura del piano. `menu_app` ha solo `SELECT`: l'avviso lo scrive `console_recover_admin`.
 
@@ -636,7 +652,7 @@ Indice: `ix_family_notice_family (family_id, created_at)` per gli avvisi attivi 
 | id | uuid | no | `gen_random_uuid()` | PK. UQ (`family_id`, `id`) | |
 | family_id | uuid | no | | FK → `family` ON DELETE CASCADE | |
 | base_code | text | sì | | CK in (`starter`, `first`, `second`, `side`, `one_dish`, `dessert`, `drink`, `other`). UQ (`family_id`, `base_code`) | Le 8 portate base si creano con la famiglia (FR-021). L'etichetta la traduce il client (ADR-0010). |
-| name | varchar(40) | sì | | CK `(base_code IS NULL) <> (name IS NULL)`. CK lunghezza 1-40 | Solo personalizzate. Lunghezza secondo ASM-063. |
+| name | text | sì | | CK `(base_code IS NULL) <> (name IS NULL)`. CK `char_length(name) BETWEEN 1 AND 40 AND btrim(name) <> ''` | Solo personalizzate. Lunghezza secondo ASM-063. |
 | name_key | text | sì | `GENERATED ALWAYS AS (lower(btrim(name))) STORED` | UQ (`family_id`, `name_key`) | AC-033.2: nessun duplicato tra portate personalizzate, senza distinzione tra maiuscole e minuscole. Il confronto con le portate base usa i **nomi riservati per lingua nella configurazione del server** (decisione dell'utente, 2026-10-18): un file versionato `backend/config/reserved_course_names.<lingua>.json`, che per `it` contiene "antipasto", "primo", "secondo" e le altre. Il servizio confronta `name_key` con i nomi riservati di tutte le lingue configurate. È un dato di validazione, non un testo dell'interfaccia: ADR-0010 resta valido. |
 | created_at | timestamptz | no | `app.now_utc()` | | |
 
@@ -647,7 +663,7 @@ Una portata in uso non si elimina: `dish_course` e `meal_item` la referenziano c
 |---|---|---|---|---|---|
 | id | uuid | no | `gen_random_uuid()` | PK. UQ (`family_id`, `id`) | |
 | family_id | uuid | no | | FK → `family` ON DELETE CASCADE | Quota di 200 per famiglia con lock sulla famiglia |
-| name | varchar(30) | no | | CK lunghezza 1-30 | |
+| name | text | no | | CK `char_length(name) BETWEEN 1 AND 30 AND btrim(name) <> ''` | |
 | name_key | text | no | `GENERATED ALWAYS AS (lower(btrim(name))) STORED` | UQ (`family_id`, `name_key`) | |
 | created_at | timestamptz | no | `app.now_utc()` | | |
 
@@ -702,7 +718,7 @@ La cancellazione definitiva di un piatto è ammessa solo se `ever_planned = fals
 | meal_date | date | no | | | Data locale (ADR-0009) |
 | meal_type | text | no | | CK in (`breakfast`, `lunch`, `snack`, `dinner`, `other`) | |
 | meal_slot | smallint | no | 0 | CK `(meal_type <> 'other' AND meal_slot = 0) OR (meal_type = 'other' AND meal_slot BETWEEN 0 AND 4)` | Occorrenza nel giorno. Più "Altro pasto" nello stesso giorno, al massimo 5 attivi (ASM-068), garantiti dal `CHECK` perché le righe rimosse si riusano. **Supportato dal modello da M0**, interfaccia in M2. |
-| name | varchar(40) | sì | | CK `name IS NULL OR (meal_type = 'other' AND char_length(btrim(name)) BETWEEN 1 AND 40)` | Nome libero di un "Altro pasto". `NULL` = etichetta localizzata "Altro pasto" nel client (ADR-0010). Contenuto della famiglia. Fa parte dell'unità (a). |
+| name | text | sì | | CK `name IS NULL OR (meal_type = 'other' AND char_length(name) BETWEEN 1 AND 40 AND btrim(name) <> '')` | Nome libero di un "Altro pasto". `NULL` = etichetta localizzata "Altro pasto" nel client (ADR-0010). Contenuto della famiglia. Fa parte dell'unità (a). |
 | presence | text | no | `'inherit'` | CK in (`inherit`, `added`, `removed`). CK `meal_slot = 0 OR presence <> 'inherit'` | Presenza del pasto nel giorno (FR-036). Le occorrenze con `meal_slot > 0` esistono solo se aggiunte esplicitamente. Nei giorni congelati vale solo `added` o `removed`. |
 | special_kind | text | sì | | CK in (`away`, `restaurant`, `skipped`) | FR-039 |
 | content_version | integer | no | 0 | CK ≥ 0 | **Unità (a)**, una per occorrenza. 0 = contenuto mai scritto. Copre voci, stato speciale, nome e `presence`. |
@@ -1275,7 +1291,7 @@ CREATE FUNCTION app.now_utc() RETURNS timestamptz
 - **Espressioni vietate:** `now()`, `CURRENT_TIMESTAMP`, `CURRENT_DATE`, `CURRENT_TIME`, `LOCALTIMESTAMP`, `LOCALTIME`, `transaction_timestamp()`, `statement_timestamp()`, `clock_timestamp()`, `timeofday()`.
 - **Elenco chiuso delle eccezioni:** una sola, il corpo di `app.now_utc()`.
 - **Fuori dal controllo:** gli schemi `extensions` e di sistema, e `alembic_version`, che non ha colonne temporali.
-- **Vincoli `CHECK`:** non possono contenere funzioni non `IMMUTABLE`, quindi non contengono "adesso". I vincoli sulle scadenze sono relativi ad altre colonne, per esempio `expires_at <= created_at + interval '24 hours'`.
+- **Vincoli `CHECK`:** non contengono "adesso" (PostgreSQL non lo impedisce da solo: non controlla la volatilità delle espressioni di un `CHECK`, ma un `CHECK` che dipende dall'istante darebbe esiti diversi nel tempo e nel ripristino). I vincoli sulle scadenze sono relativi ad altre colonne e **in ore**, per esempio `expires_at = created_at + interval '168 hours'`: `timestamptz + interval` è `STABLE` perché un intervallo in giorni o mesi dipende dal `TimeZone` della sessione (cambio dell'ora legale), mentre un intervallo di sole ore no. Verificato in SL-02 con una sessione `Europe/Rome`.
 - **SQL nel codice Python:** il catalogo non lo vede. Proposta al tester: estendere il test di architettura (`ast`) alle stringhe SQL dei repository, con le stesse espressioni vietate.
 
 **Funzioni `LANGUAGE sql` (elenco per `INLINABLE_SQL_FUNCTIONS`, `docs/08-test-strategy.md` §6.7).** Il planner può inlinare una funzione SQL in base al contesto della chiamata: scalare, oppure set-returning in `FROM`, `STABLE` o `IMMUTABLE`, senza `SECURITY DEFINER` né `SET`. Quando la inlina, `track_functions` non conta la chiamata. Per non dipendere da questo dettaglio, la regola è semplice: **tutte** le funzioni `LANGUAGE sql` dello schema `app` sono nell'elenco, e ognuna ha un test di chiamata diretta.
@@ -1286,7 +1302,7 @@ CREATE FUNCTION app.now_utc() RETURNS timestamptz
 | `app.current_family_id()` | `STABLE` | Sezione 6.1 |
 | `app.current_account_id()` | `STABLE` | Sezione 6.1 |
 | `app.search_norm(text)` | `IMMUTABLE`, `STRICT`, `PARALLEL SAFE` | `SELECT lower(extensions.unaccent('extensions.unaccent'::regdictionary, $1))`. Il dizionario esplicito rende sicura la dichiarazione `IMMUTABLE`, necessaria per la colonna generata `dish.name_search`. Probabilmente **non** viene inlinata, perché `unaccent` è `STABLE`, ma resta nell'elenco per la regola sopra. |
-| `app.family_today()` | `STABLE` | `SELECT (app.now_utc() AT TIME ZONE f.timezone)::date FROM app.family f WHERE f.id = app.current_family_id()` |
+| `app.family_today()` | `STABLE`, `PARALLEL SAFE` | `SELECT (app.now_utc() AT TIME ZONE f.timezone)::date FROM app.family f WHERE f.id = app.current_family_id()`. Sotto RLS: `NULL` senza contesto o con una famiglia inesistente. Verificata in SL-02 attorno alla mezzanotte locale e ai cambi dell'ora legale (`tests/db/test_family_today.py`). |
 | `app.effective_meals(date, date)` | `STABLE` | Set-returning, inlinata quando compare in `FROM` |
 | `app.effective_attendance(date, date)` | `STABLE` | Set-returning, inlinata quando compare in `FROM`, anche dentro `ensure_frozen` |
 
@@ -1323,26 +1339,20 @@ Sono invece `LANGUAGE plpgsql`, quindi sempre contate: `ensure_frozen`, le funzi
   - **Espansione:** nuove tabelle o colonne annullabili, con default costante (operazione istantanea in PostgreSQL 17), e indici con `CREATE INDEX CONCURRENTLY` fuori transazione (`with op.get_context().autocommit_block()`). Ai volumi attesi bastano pochi millisecondi anche senza.
   - **Contrazione:** rimozione di colonne o vincoli in una release successiva, dopo che il codice non li usa più.
   - **Vincoli su tabelle grandi** (solo `change_event` e `attendance` sono candidate): `ADD CONSTRAINT … NOT VALID`, poi `VALIDATE CONSTRAINT`.
-- **Sequenza proposta per milestone** (la decide il tech-lead nel piano):
+- **Sequenza delle revisioni:** è quella vincolante di `docs/07-plan.md` §9, che sostituisce la proposta per milestone delle versioni precedenti. I numeri si assegnano all'implementazione, in ordine. Revisioni già scritte:
 
-  | Revisione | Contenuto | Mx |
-  |---|---|---|
-  | `0001` | `now_utc`, funzioni di contesto, `search_norm`, revoche | M0 |
-  | `0002` | Identità: `account`, `session`, `auth_flow` | M0 |
-  | `0003` | Famiglia: `family`, `family_default_meal`, `person`, `family_bootstrap`, trigger | M0 |
-  | `0004` | Catalogo: `course`, `dish`, `dish_course`, `dish_source` | M0 |
-  | `0005` | Piano: `meal`, `meal_item` | M0 |
-  | `0006` | Eventi: `change_event` | M0 |
-  | `0007` | Registro e operazioni: `security_event`, `periodic_task_run`, `rate_counter` | M0 |
-  | `0008` | Funzioni `SECURITY DEFINER` di M0 (risolutori, console, conservazione del registro, spazio) | M0 |
-  | `0009` … | M1: `invite`, `auth_flow.invite_id` e `return_to`, `signup_pending`, `typical_week*`, `attendance` (con `meal_slot`), funzioni di presenza, `dish_like`, `weekly_visit`, `deletion_log`, `job`, `export_file` con `purge_family_exports`, `family_notice`, `family_notice_dismissal`, `account.last_visit_at`, funzioni console e maint di M1 (compreso `console_recover_admin`), vista statistiche | M1 |
-
-  | successive | M2: `tag`, `dish_tag`, `creation_code`, `dish.priority` con `ix_dish_family_priority`, `account.dish_sort_preference`, funzioni di M2 | M2 |
-  | *rinviata* | Solo se FR-002 viene ripreso (CHG-020): `password_credential`, `account_token`, `rate_block`, modifiche ad `account` della sezione 4.3 | dopo M2 |
+  | Revisione | Contenuto | Slice | Stato |
+  |---|---|---|---|
+  | `0001` | `now_utc`, funzioni di contesto, `search_norm`, controllo dei prerequisiti | SL-00b | eseguita |
+  | `0002` | `family`, `family_default_meal`, `person` (senza FK verso `account`), `family_bootstrap`, `course`; RLS e grant; trigger `tg_family_timezone_valid` e `tg_person_admin_invariant`; `app.family_today()` | SL-02 | eseguita |
+  | `0003` | `security_event`, `ix_security_event_time`, trigger `tg_security_event_immutable` | SL-02 | eseguita |
+  | `0004` | `console_bootstrap_family`, `console_security_events`, `console_audit_note` | SL-02 | eseguita |
+  | `0005` … | Ordine 5 e seguenti del piano: `account` con la FK `person.account_id`, `session`, `auth_flow`, i risolutori (SL-03a), poi `rate_counter`, catalogo, eventi, piano, M1 e M2 | | da scrivere |
+  | *rinviata* | Solo se FR-002 viene ripreso (CHG-020): `password_credential`, `account_token`, `rate_block`, modifiche ad `account` della sezione 4.3 | | dopo M2 |
 
   Il `CONNECTION LIMIT` e la revoca di `CREATE` sugli schemi stanno in `db/bootstrap.sql`, perché riguardano ruoli e schemi creati fuori da Alembic. Il test d'inventario li verifica a ogni esecuzione della CI.
 
-  `meal.meal_slot`, `meal.name`, `meal_item.meal_slot` e `change_event.meal_slot` nascono già in `0005` e `0006` (M0). Così più "Altro pasto" nello stesso giorno (interfaccia in M2) non richiedono di cambiare la chiave primaria di tabelle già popolate.
+  `meal.meal_slot`, `meal.name`, `meal_item.meal_slot` e `change_event.meal_slot` nascono già nelle migrazioni di M0 che creano `meal`, `meal_item` e `change_event` (ordine 8 e 9 del piano). Così più "Altro pasto" nello stesso giorno (interfaccia in M2) non richiedono di cambiare la chiave primaria di tabelle già popolate.
 
 ## 13. Backup, ripristino e conservazione
 

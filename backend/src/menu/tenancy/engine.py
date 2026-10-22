@@ -2,6 +2,7 @@
 
 from collections.abc import Iterator
 from contextlib import contextmanager
+from uuid import UUID
 
 from sqlalchemy import Connection, Engine, create_engine, event, text
 from sqlalchemy.engine import ExceptionContext, make_url
@@ -90,6 +91,17 @@ def family_tx(ctx: RequestContext) -> Iterator[Tx]:
 def system_tx() -> Iterator[Tx]:
     """Transazione senza contesto di famiglia (tabelle non di famiglia, 05-data §6.3)."""
     with _require_engine().begin() as conn:
+        yield conn
+
+
+@contextmanager
+def console_tx(correlation_id: UUID) -> Iterator[Tx]:
+    """Transazione del job della console: solo `app.correlation_id` locale (ADR-0011)."""
+    with _require_engine().begin() as conn:
+        conn.execute(
+            text("select set_config('app.correlation_id', cast(:correlation as text), true)"),
+            {"correlation": str(correlation_id)},
+        )
         yield conn
 
 

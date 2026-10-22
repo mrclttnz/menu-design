@@ -1,15 +1,18 @@
 """Inventario delle funzioni SECURITY DEFINER (05-data §3.3, 08 §6.5; THR-044).
 
-In SL-00b l'insieme atteso è VUOTO (nessuna funzione privilegiata). Il controllo è provato
-con funzioni sintetiche: un inventario che non sa fallire non vale nulla.
+SL-02: l'insieme atteso è esattamente `console_bootstrap_family`, `console_security_events`,
+`console_audit_note` (ADR-0011), eseguibili solo da `menu_console`. Il controllo è provato
+anche con funzioni sintetiche: un inventario che non sa fallire non vale nulla.
 """
 
 import psycopg
+import pytest
 
 from support.inventory import (
     EXPECTED_SECDEF_NOW,
     SQL_FUNCTIONS_NOW,
     app_functions,
+    public_can_execute,
     secdef_problems,
 )
 from support.owner import Owner
@@ -22,9 +25,49 @@ def test_migration_0001_created_the_context_functions(catalog: psycopg.Connectio
     assert names >= SQL_FUNCTIONS_NOW
 
 
-def test_secdef_inventory_is_empty_in_sl_00b(catalog: psycopg.Connection) -> None:
-    assert frozenset() == EXPECTED_SECDEF_NOW
+def test_secdef_inventory_is_the_three_console_functions_of_sl_02(
+    catalog: psycopg.Connection,
+) -> None:
+    assert {
+        "console_bootstrap_family",
+        "console_security_events",
+        "console_audit_note",
+    } == EXPECTED_SECDEF_NOW
     assert secdef_problems(catalog, EXPECTED_SECDEF_NOW) == []
+
+
+@pytest.mark.parametrize("name", sorted(EXPECTED_SECDEF_NOW))
+def test_console_functions_are_executable_only_by_menu_console(
+    catalog: psycopg.Connection, name: str
+) -> None:
+    """THR-044, SR-040: EXECUTE al solo ruolo previsto, mai a PUBLIC né a `menu_app`."""
+    oids = [f["oid"] for f in app_functions(catalog) if f["name"] == name]
+    assert len(oids) == 1, f"app.{name} assente o in più firme"
+    can = {
+        role: catalog.execute(
+            "select has_function_privilege(%s, %s::oid, 'EXECUTE')", (role, oids[0])
+        ).fetchone()
+        for role in ("menu_console", "menu_app", "menu_backup", "menu_owner")
+    }
+    assert can["menu_console"] == (True,)
+    assert can["menu_app"] == (False,)
+    assert can["menu_backup"] == (False,)
+    assert not public_can_execute(catalog, oids[0])
+
+
+@pytest.mark.parametrize("name", sorted(EXPECTED_SECDEF_NOW))
+def test_secdef_functions_are_plpgsql(catalog: psycopg.Connection, name: str) -> None:
+    """05-data §3.3: tutte plpgsql (così compaiono in pg_stat_user_functions)."""
+    found = {f["name"]: f for f in app_functions(catalog)}
+    assert found[name]["language"] == "plpgsql"
+
+
+def test_no_app_function_is_executable_by_public(catalog: psycopg.Connection) -> None:
+    """08 §6.5: funzioni INVOKER e trigger comprese (ALTER DEFAULT PRIVILEGES di bootstrap)."""
+    open_to_public = [
+        f["name"] for f in app_functions(catalog) if public_can_execute(catalog, f["oid"])
+    ]
+    assert open_to_public == []
 
 
 def test_context_functions_are_security_invoker(catalog: psycopg.Connection) -> None:
@@ -67,6 +110,6 @@ def test_inventory_detects_missing_search_path_and_public_execute(
 def test_inventory_detects_an_expected_function_that_is_missing(
     catalog: psycopg.Connection,
 ) -> None:
-    assert secdef_problems(catalog, frozenset({"session_resolve"})) == [
+    assert secdef_problems(catalog, EXPECTED_SECDEF_NOW | {"session_resolve"}) == [
         "funzione SECURITY DEFINER attesa e assente: session_resolve"
     ]

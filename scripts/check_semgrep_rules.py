@@ -22,6 +22,15 @@ NOW = 'op.execute("insert into t values (now())")\n'
 NOW_ALLOWED = 'NOW_UTC_BODY = "select now()"  # allow-bare-now: corpo di app.now_utc()\n'
 NOW_OTHER = 'OTHER = "select now()"\n'
 
+# SR-042: l'attributo di funzione `security definer set search_path` NON e' un SET di sessione;
+# SET/RESET di sessione e set_config(..., false) restano vietati.
+SECDEF_ATTR = 'q = "create function f() returns int language sql security definer set search_path = app, pg_temp as $$ select 1 $$"\n'
+SESSION_SET_SP = 'q = "SET search_path = public"\n'
+SESSION_SET_ROLE = 'q = "SET ROLE postgres"\n'
+SESSION_RESET_ALL = 'q = "RESET ALL"\n'
+SESSION_SET_CFG_FALSE = "q = \"select set_config('search_path', 'public', false)\"\n"
+SECDEF_PLUS_SESSION = SECDEF_ATTR + SESSION_SET_SP
+
 ASYNC = "from sqlalchemy.ext.asyncio import create_async_engine\ncreate_async_engine('postgresql+psycopg://x')\n"
 TEXT_VAR = "q = f'select {x}'\ntext(q)\n"
 
@@ -42,6 +51,19 @@ CASES: dict[str, tuple[str, set[str]]] = {
     "backend/src/menu/tenancy/cfg_true.py": (SET_CFG_TRUE, set()),
     "backend/src/menu/tenancy/cfg_nested.py": (SET_CFG_NESTED, {"menu-set-config-session-scope"}),
     "backend/tests/unit/test_cfg.py": (SET_CFG, set()),
+    "backend/migrations/versions/0005_secdef.py": (SECDEF_ATTR, set()),
+    "backend/src/menu/orders/secdef_attr.py": (SECDEF_ATTR, set()),
+    "backend/src/menu/orders/set_sp.py": (SESSION_SET_SP, {"menu-set-config-session-scope"}),
+    "backend/src/menu/orders/set_role.py": (SESSION_SET_ROLE, {"menu-set-config-session-scope"}),
+    "backend/src/menu/orders/reset_all.py": (SESSION_RESET_ALL, {"menu-set-config-session-scope"}),
+    "backend/src/menu/orders/set_cfg_false_sp.py": (
+        SESSION_SET_CFG_FALSE,
+        {"menu-set-config-session-scope", "menu-set-config-outside-tenancy"},
+    ),
+    "backend/src/menu/orders/secdef_plus_session.py": (
+        SECDEF_PLUS_SESSION,
+        {"menu-set-config-session-scope"},
+    ),
     "backend/migrations/versions/0001_x.py": (NOW, {"menu-bare-now-in-migrations"}),
     "backend/src/menu/orders/now.py": (NOW, set()),
     "backend/migrations/versions/0001_allowed.py": (NOW_ALLOWED, set()),

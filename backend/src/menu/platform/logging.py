@@ -23,6 +23,15 @@ ALLOWED_FIELDS = frozenset(
         "path",
         "status",
         "duration_ms",
+        # evento di sicurezza strutturato (audit.security_log, SR-058): mai l'IP completo
+        "event_type",
+        "outcome",
+        "actor_kind",
+        "actor_role",
+        "family_id",
+        "target_type",
+        "target_id",
+        "ip_prefix",
     }
 )
 FORBIDDEN_KEYS = frozenset(

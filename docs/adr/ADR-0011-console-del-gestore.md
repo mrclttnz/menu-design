@@ -38,7 +38,7 @@ Il Gestore agisce solo da console, senza interfaccia di amministrazione e senza 
 
 ### Esecuzione
 - **Job:** Cloud Run Job `menu-console` in europe-west3, stessa immagine del backend, comando `python -m menu console <comando> …`.
-- **Script locale** (`scripts/console.sh` o `uv run python -m menu.console_client`), che:
+- **Script locale** (`uv run python -m menu.console_client`; nessuno script wrapper; la lettura dei log del job arriva in SL-10b, vedi piano §4.4), che:
   - **chiede le email solo con un prompt interattivo** (`getpass`, senza eco), mai come argomento della riga di comando, così non finiscono nella cronologia della shell;
   - **calcola in locale** gli hash:
     - per le email, con la normalizzazione esatta descritta in "Hash dell'email" qui sotto;

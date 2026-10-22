@@ -172,7 +172,6 @@ Monorepo, come richiesto da ADR-0001 e ADR-0002. Un'unica immagine container con
 ├── scripts/
 │   ├── ci.sh                       # passi della CI, eseguibili in locale (richiamati dal Makefile)
 │   ├── role-secret.sh              # Cloud Shell: password ruoli → Secret Manager, stampa verificatore SCRAM
-│   └── console.sh                  # wrapper di menu.console_client
 ├── .semgrep/                       # regole proprie (threat model §11, now() nudo nelle migrazioni)
 ├── .github/workflows/
 │   ├── ci.yml                      # push su main e PR: controlli bloccanti
@@ -554,6 +553,8 @@ Il contratto dei comandi del Gestore è ADR-0011 (tabella "Comandi"). Il piano l
 | `codes issue|list|revoke` | `console_issue_code`, `console_list_codes`, `console_revoke_code` | SL-32 |
 
 Regole comuni, verificate da test in ogni slice che aggiunge un comando: email solo al prompt (`getpass`), argomenti del job solo hash esadecimali minuscoli, ID e `request_ref` validato con `^[A-Z]{2,5}-[0-9]{8}-[0-9]{1,3}$`; output solo ID ed esiti; un evento di sicurezza per ogni esito.
+
+**Deviazione SL-02 (CR-SL02-002, decisione dell'utente 2026-10-22):** `gcloud run jobs execute --wait` riporta solo lo stato dell'esecuzione, non lo stdout del job. Fino a SL-10b (che distribuisce il job) lo script locale non legge i log: dice chiaramente che l'esito (ID famiglia, eventi) va letto nei log del job Cloud Run. Il job di bootstrap stampa solo l'ID della famiglia, mai il nome (CR-SL02-006). Lettura automatica dei log in SL-10b.
 
 ## 5. Convenzioni
 

@@ -78,18 +78,25 @@ def test_migrations_never_use_bare_time_functions_except_the_now_utc_body() -> N
     assert sum(p.read_text(encoding="utf-8").count("allow-bare-now:") for p in _revisions()) == 1
 
 
-def _all_inventories(conn: psycopg.Connection, *, with_functions: bool) -> None:
+def _all_inventories(conn: psycopg.Connection, *, state: str) -> None:
+    """`state`: "head" (0004), "previous" (0003, dopo `downgrade -1`), "base" (nessuna)."""
     assert bare_time_problems(conn) == []
     assert rls_problems(conn) == []
-    assert secdef_problems(conn, EXPECTED_SECDEF_NOW) == []
+    expected_secdef = EXPECTED_SECDEF_NOW if state == "head" else frozenset()
+    assert secdef_problems(conn, expected_secdef) == []
     names = {
         r[0]
         for r in conn.execute(
             "select proname from pg_proc where pronamespace = 'app'::regnamespace"
         ).fetchall()
     }
-    if with_functions:
-        assert names >= SQL_FUNCTIONS_NOW
+    if state == "head":
+        assert names >= SQL_FUNCTIONS_NOW | EXPECTED_SECDEF_NOW
+    elif state == "previous":
+        # 0003: le funzioni di 0001/0002 restano, le `console_*` di 0004 sono sparite.
+        assert names >= SQL_FUNCTIONS_NOW, names
+        left = names & EXPECTED_SECDEF_NOW
+        assert not left, f"il downgrade ha lasciato {left}"
     else:
         assert names == set(), f"il downgrade ha lasciato funzioni: {names}"
 
@@ -107,18 +114,18 @@ def test_ladder_upgrade_downgrade_upgrade_and_base_head_with_inventories() -> No
 
         step("upgrade", "head")
         with pg.admin_connect(name) as conn:
-            _all_inventories(conn, with_functions=True)
+            _all_inventories(conn, state="head")
             at_head = schema_snapshot(conn)
         step("downgrade", "-1")
         with pg.admin_connect(name) as conn:
-            _all_inventories(conn, with_functions=False)
+            _all_inventories(conn, state="previous")
         step("upgrade", "head")
         step("downgrade", "base")
         with pg.admin_connect(name) as conn:
-            _all_inventories(conn, with_functions=False)
+            _all_inventories(conn, state="base")
         step("upgrade", "head")
         with pg.admin_connect(name) as conn:
-            _all_inventories(conn, with_functions=True)
+            _all_inventories(conn, state="head")
             assert schema_snapshot(conn) == at_head, "schema diverso dopo il ciclo (08 §10.3)"
         assert at_head
 

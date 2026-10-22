@@ -113,5 +113,11 @@ def session_level_statements(conn: object) -> None:
     # ok: menu-set-config-session-scope
     conn.execute("SET LOCAL search_path = app, pg_temp")
     # ok: menu-set-config-session-scope
+    conn.execute("create function f() returns int language sql security definer set search_path = app, pg_temp as $$ select 1 $$")
+    # ruleid: menu-set-config-session-scope
+    conn.execute("RESET ALL")
+    # ruleid: menu-set-config-session-scope, menu-set-config-outside-tenancy
+    conn.execute("select set_config('search_path', 'public', false)")
+    # ok: menu-set-config-session-scope
     # ruleid: menu-set-config-outside-tenancy
     conn.execute("select set_config('app.family_id', cast(:f as text), true)")

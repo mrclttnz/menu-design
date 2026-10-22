@@ -5,6 +5,6 @@ con `set_config(..., true)`, cioè locale alla transazione: non sopravvive al ri
 connessione dal pool (THR-026, THR-027). L'app lavora sempre come `menu_app` (SR-042).
 """
 
-from menu.tenancy.engine import Tx, dispose, family_tx, init, ping, system_tx
+from menu.tenancy.engine import Tx, console_tx, dispose, family_tx, init, ping, system_tx
 
-__all__ = ["Tx", "dispose", "family_tx", "init", "ping", "system_tx"]
+__all__ = ["Tx", "console_tx", "dispose", "family_tx", "init", "ping", "system_tx"]

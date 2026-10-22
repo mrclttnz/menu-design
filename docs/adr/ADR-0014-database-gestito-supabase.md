@@ -63,6 +63,7 @@ Sono punti non verificati durante il design. Vanno controllati sul progetto real
    - Da questo dipendono la soglia dell'allarme al 70% calcolata da `maint_db_size()` e la stima di `docs/05-data.md` §14.
 3. **Connessione per `pg_dump`:** il pooler in modalità sessione (IPv4) accetta `pg_dump --enable-row-security` con `menu_backup` (ADR-0015).
 4. **Major version** di PostgreSQL del progetto (attesa 17) e disponibilità di `unaccent` e `pg_trgm` nello schema `extensions`.
+   - *Nota del data-architect (SL-02, 2026-10-22):* le migrazioni `0002`-`0004` sono verificate su PostgreSQL 17 locale e usano solo funzioni standard: colonne `GENERATED ALWAYS AS IDENTITY`, colonne generate `STORED`, `CONSTRAINT TRIGGER … DEFERRABLE`, plpgsql, RLS forzata, `SECURITY DEFINER` di `menu_owner`. Il trigger `tg_family_timezone_valid` legge `pg_catalog.pg_timezone_names`. Sul progetto va solo verificato che `alembic upgrade head` riesca come `menu_owner` e che `SELECT count(*) FROM pg_timezone_names WHERE name = 'Europe/Rome'` restituisca 1. Nessuna funzione specifica di Supabase.
 5. **Disattivazione della Data API** e revoca dei privilegi di default ad `anon` e `authenticated`, verificate con una richiesta REST che deve fallire.
 6. **Ban automatici** sui tentativi di autenticazione falliti, attivi (ADR-0016, controllo 5).
 

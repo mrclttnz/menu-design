@@ -33,7 +33,7 @@ rules:
     languages: [generic]
     severity: ERROR
     message: "set_config(..., false) o SET/RESET di sessione vietati ovunque: solo SET LOCAL / set_config(..., true) nella transazione (THR-025, THR-027, SR-042)."
-    pattern-regex: (?i)\bset_config\s*\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*,\s*\(*\s*(?:false|'(?:f|false|off|no|n|0)'|"(?:f|false|off|no|n|0)")\s*\)*\s*\)|\b(?:SET|RESET)\s+(?!LOCAL\b)(?:SESSION\s+)?(?:app\.|role\b|search_path\b|authorization\b|all\b)
+    pattern-regex: (?i)\bset_config\s*\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*,\s*\(*\s*(?:false|'(?:f|false|off|no|n|0)'|"(?:f|false|off|no|n|0)")\s*\)*\s*\)|(?<!definer )\b(?:SET|RESET)\s+(?!LOCAL\b)(?:SESSION\s+)?(?:app\.|role\b|search_path\b|authorization\b|all\b)
     paths:
       exclude:
         - "**/tests/"

@@ -32,6 +32,7 @@ from psycopg import sql
 
 from .paths import BACKEND, REPO
 
+LOOPBACK_HOSTS = ("localhost", "127.0.0.1", "::1")
 ROLES = ("menu_owner", "menu_app", "menu_console", "menu_backup")
 # Password sintetica dei ruoli nel cluster di test (mai usata altrove; i ruoli reali non hanno
 # password nel file `bootstrap.sql`, ADR-0015).
@@ -69,6 +70,13 @@ class Cluster:
 
 def cluster() -> Cluster:
     host = os.environ.get("MENU_TEST_PG_HOST", "localhost")
+    # SEC-SL00b-004: i ruoli di test hanno una password pubblica; mai su un host non locale
+    # senza consenso esplicito (`MENU_TEST_PG_ALLOW_REMOTE=1`; la CI usa localhost).
+    if host not in LOOPBACK_HOSTS and os.environ.get("MENU_TEST_PG_ALLOW_REMOTE") != "1":
+        raise RuntimeError(
+            "MENU_TEST_PG_HOST non è locale: la password dei ruoli di test è pubblica. "
+            "Impostare MENU_TEST_PG_ALLOW_REMOTE=1 solo per un cluster di test dedicato."
+        )
     port = int(os.environ.get("MENU_TEST_PG_PORT") or os.environ.get("MENU_PG_HOST_PORT") or 5432)
     ca = Path(os.environ.get("MENU_TEST_PG_CA", str(REPO / "db" / "dev-certs" / "ca.crt")))
     return Cluster(

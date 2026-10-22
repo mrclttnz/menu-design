@@ -59,10 +59,19 @@ NON_FAMILY_TABLES = frozenset(
 )
 # RLS per account (non di famiglia): ENABLE + FORCE + p_owner + p_backup.
 ACCOUNT_RLS_TABLES = frozenset({"session", "export_file"})
-# SL-00b: nessuna tabella di dominio (solo `alembic_version`).
-EXPECTED_TABLES_NOW = frozenset({"alembic_version"})
-# docs/05-data.md §3.3: inventario SECURITY DEFINER atteso alla fine di questa slice: vuoto.
-EXPECTED_SECDEF_NOW: frozenset[str] = frozenset()
+# SL-02: tabelle di famiglia create da questa slice (05-data §4.2: `family` filtra su `id`,
+# le altre su `family_id`); ogni slice successiva estende questi elenchi.
+EXPECTED_FAMILY_TABLES_NOW = frozenset(
+    {"family", "family_default_meal", "person", "family_bootstrap", "course"}
+)
+# Tabelle non di famiglia presenti alla fine di SL-02 (05-data §6.3).
+EXPECTED_OTHER_TABLES_NOW = frozenset({"security_event", "alembic_version"})
+EXPECTED_TABLES_NOW = EXPECTED_FAMILY_TABLES_NOW | EXPECTED_OTHER_TABLES_NOW
+# docs/05-data.md §3.3: inventario SECURITY DEFINER atteso alla fine di SL-02 (tutte e solo
+# `console_*`, eseguibili solo da `menu_console`, ADR-0011).
+EXPECTED_SECDEF_NOW: frozenset[str] = frozenset(
+    {"console_bootstrap_family", "console_security_events", "console_audit_note"}
+)
 # docs/05-data.md §11.1 / 08 §6.7: elenco chiuso delle funzioni LANGUAGE sql (intero, a regime).
 INLINABLE_SQL_FUNCTIONS = frozenset(
     {
@@ -75,8 +84,10 @@ INLINABLE_SQL_FUNCTIONS = frozenset(
         "effective_attendance",
     }
 )
-# Funzioni LANGUAGE sql create dalle migrazioni fino a questa slice (0001, plan §3.2).
-SQL_FUNCTIONS_NOW = frozenset({"now_utc", "current_family_id", "current_account_id", "search_norm"})
+# Funzioni LANGUAGE sql create fino a questa slice (0001 + `family_today` di SL-02).
+SQL_FUNCTIONS_NOW = frozenset(
+    {"now_utc", "current_family_id", "current_account_id", "search_norm", "family_today"}
+)
 
 _FORBIDDEN_TIME = re.compile(
     r"\bnow\s*\(|\bcurrent_timestamp\b|\bcurrent_date\b|\bcurrent_time\b|\blocaltimestamp\b"
@@ -448,6 +459,7 @@ class FamilyTableSpec:
 
     seed: Callable[[Owner, UUID], None]  # una riga per la famiglia indicata, via owner
     insert_sql: Callable[[UUID], tuple[str, tuple[Any, ...]]]  # INSERT eseguito da menu_app
+    key_column: str = "family_id"  # colonna su cui filtra la RLS (`id` per la tabella `family`)
 
 
 def family_isolation_problems(
@@ -455,6 +467,7 @@ def family_isolation_problems(
 ) -> list[str]:
     """08 §6.4: senza contesto zero righe; A non vede B; INSERT/UPDATE altrui rifiutati."""
     problems: list[str] = []
+    key = spec.key_column
     spec.seed(owner, fam_a)
     spec.seed(owner, fam_b)
 
@@ -471,11 +484,11 @@ def family_isolation_problems(
         conn.rollback()
         in_ctx(conn, fam_a)
         other = conn.execute(
-            f"select count(*) from app.{table} where family_id = %s".encode(),  # noqa: S608  (identificatore generato dal test o dal catalogo)
+            f"select count(*) from app.{table} where {key} = %s".encode(),  # noqa: S608  (identificatore generato dal test o dal catalogo)
             (fam_b,),
         ).fetchone()
         mine = conn.execute(
-            f"select count(*) from app.{table} where family_id = %s".encode(),  # noqa: S608  (identificatore generato dal test o dal catalogo)
+            f"select count(*) from app.{table} where {key} = %s".encode(),  # noqa: S608  (identificatore generato dal test o dal catalogo)
             (fam_a,),
         ).fetchone()
         if other is None or other[0] != 0:
@@ -483,13 +496,13 @@ def family_isolation_problems(
         if mine is None or mine[0] < 1:
             problems.append(f"{table}: con il contesto A non vede le proprie righe")
         upd = conn.execute(
-            f"update app.{table} set family_id = family_id where family_id = %s".encode(),  # noqa: S608  (identificatore generato dal test o dal catalogo)
+            f"update app.{table} set {key} = {key} where {key} = %s".encode(),  # noqa: S608  (identificatore generato dal test o dal catalogo)
             (fam_b,),
         )
         if upd.rowcount != 0:
             problems.append(f"{table}: UPDATE di righe di B dal contesto A ha toccato righe")
         dele = conn.execute(
-            f"delete from app.{table} where family_id = %s".encode(),  # noqa: S608  (identificatore generato dal test o dal catalogo)
+            f"delete from app.{table} where {key} = %s".encode(),  # noqa: S608  (identificatore generato dal test o dal catalogo)
             (fam_b,),
         )
         if dele.rowcount != 0:
@@ -509,7 +522,7 @@ def family_isolation_problems(
         in_ctx(conn, fam_a)
         try:
             conn.execute(
-                f"update app.{table} set family_id = %s where family_id = %s".encode(),  # noqa: S608  (identificatore generato dal test o dal catalogo)
+                f"update app.{table} set {key} = %s where {key} = %s".encode(),  # noqa: S608  (identificatore generato dal test o dal catalogo)
                 (fam_b, fam_a),
             )
             problems.append(f"{table}: UPDATE che sposta una riga in B accettato")

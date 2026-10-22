@@ -1,4 +1,4 @@
-"""Comandi: `python -m menu serve|seed` (worker e console arrivano con le loro slice)."""
+"""Comandi: `python -m menu serve|seed|console` (il worker arriva con la sua slice)."""
 
 import argparse
 import os
@@ -31,12 +31,22 @@ def _seed(dataset: str) -> int:
     return run(dataset)
 
 
+def _console(arguments: Sequence[str]) -> int:
+    from menu.console import run
+
+    return run(arguments)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    if arguments[:1] == ["console"]:
+        return _console(arguments[1:])
     parser = argparse.ArgumentParser(prog="menu")
     commands = parser.add_subparsers(dest="command", required=True)
     serve = commands.add_parser("serve", help="avvia il server HTTP")
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=int(os.environ.get("PORT", DEFAULT_PORT)))
+    commands.add_parser("console", help="comandi del job menu-console (menu console --help)")
     seed = commands.add_parser("seed", help="carica un dataset sintetico (con guardia)")
     seed.add_argument("--dataset", required=True)
     args = parser.parse_args(argv)

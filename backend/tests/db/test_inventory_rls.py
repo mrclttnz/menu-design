@@ -1,8 +1,8 @@
 """Inventario RLS e test d'isolamento generico (05-data §6.3-6.4, 08 §6.4; THR-026, THR-048).
 
-In SL-00b non esistono tabelle di famiglia: l'inventario e il test generico girano su un
-insieme vuoto, e la loro capacità di fallire è provata con tabelle sintetiche (create e
-distrutte dal test).
+SL-02 (prima RLS su tabelle reali): `family`, `family_default_meal`, `person`,
+`family_bootstrap`, `course`. L'inventario e il test generico girano su di esse, e la loro
+capacità di fallire resta provata con tabelle sintetiche (create e distrutte dal test).
 """
 
 from collections.abc import Callable
@@ -13,6 +13,7 @@ import psycopg
 import pytest
 
 from support.inventory import (
+    EXPECTED_FAMILY_TABLES_NOW,
     EXPECTED_TABLES_NOW,
     FamilyTableSpec,
     app_tables,
@@ -29,9 +30,23 @@ def test_schema_app_exists_and_only_expected_tables_exist(catalog: psycopg.Conne
     assert set(app_tables(catalog)) == set(EXPECTED_TABLES_NOW)
 
 
-def test_no_family_tables_yet_and_rls_inventory_is_clean(catalog: psycopg.Connection) -> None:
-    assert family_tables(catalog) == []
+def test_family_tables_of_sl_02_exist_and_rls_inventory_is_clean(
+    catalog: psycopg.Connection,
+) -> None:
+    """SR-042, THR-026: tutte le tabelle nuove hanno RLS abilitata e forzata, p_family
+    (con WITH CHECK), p_owner e p_backup; nessuna tabella è non classificata."""
+    assert set(family_tables(catalog)) == set(EXPECTED_FAMILY_TABLES_NOW)
     assert rls_problems(catalog) == []
+
+
+def test_family_table_policies_filter_on_the_right_column(catalog: psycopg.Connection) -> None:
+    """`family` filtra su `id`, le altre su `family_id` (05-data §4.2): una policy sulla
+    colonna sbagliata passerebbe l'ispezione generica ma non isolerebbe nulla."""
+    tables = app_tables(catalog)
+    assert tables["family"]["policies"]["p_family"]["using"].replace(" ", "").startswith("(id=")
+    for name in sorted(EXPECTED_FAMILY_TABLES_NOW - {"family"}):
+        using = tables[name]["policies"]["p_family"]["using"].replace(" ", "")
+        assert "family_id=app.current_family_id()" in using, (name, using)
 
 
 def test_alembic_version_lives_in_schema_app(catalog: psycopg.Connection) -> None:
@@ -85,7 +100,7 @@ def test_rls_inventory_flags_an_unclassified_table(
 def test_generic_isolation_runs_over_every_family_table(
     catalog: psycopg.Connection,
 ) -> None:
-    """Per ogni tabella con `family_id` esiste una spec in `FAMILY_TABLE_SPECS` (vuoto ora)."""
+    """Per ogni tabella con `family_id` (e per `family`) esiste una spec in `FAMILY_TABLE_SPECS`."""
     from support.family_specs import FAMILY_TABLE_SPECS
 
     assert sorted(FAMILY_TABLE_SPECS) == family_tables(catalog)
@@ -136,3 +151,18 @@ def test_generic_isolation_catches_a_permissive_with_check(
     table, spec = make_probe_table(policy_check="true")
     problems = family_isolation_problems(table, spec, owner, *two_families, connect_app)
     assert any("INSERT con family_id di B accettato" in p for p in problems), problems
+
+
+@pytest.mark.parametrize("table", sorted(EXPECTED_FAMILY_TABLES_NOW))
+def test_real_family_tables_isolate_families(
+    table: str,
+    owner: Owner,
+    connect_app: Callable[..., psycopg.Connection],
+    two_families: tuple[UUID, UUID],
+) -> None:
+    """08 §6.4 sulle tabelle reali: senza contesto zero righe, A non vede B, INSERT e UPDATE
+    verso B rifiutati, DELETE di righe altrui = 0 (THR-020, THR-026, SR-042)."""
+    from support.family_specs import FAMILY_TABLE_SPECS
+
+    spec = FAMILY_TABLE_SPECS[table]
+    assert family_isolation_problems(table, spec, owner, *two_families, connect_app) == []
