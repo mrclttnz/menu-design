@@ -1,15 +1,18 @@
-import { Navigate, type RouteObject } from "react-router";
+import { type RouteObject } from "react-router";
 import { LoginPage } from "../features/auth/LoginPage";
+import { PlanPage } from "../features/plan/PlanPage";
 import { NotFoundPage } from "./NotFoundPage";
+import { HomeRedirect, RequireSession } from "./RequireSession";
 import { RootLayout } from "./RootLayout";
 
-// Rotte della SPA (docs/03-ux.md §3). Senza sessione in questa slice, `/` porta a S-01.
+// Rotte della SPA (docs/03-ux.md §3). `/` porta al piano con una sessione, a S-01 senza.
 export const routes: RouteObject[] = [
   {
     element: <RootLayout />,
     children: [
-      { index: true, element: <Navigate to="/accedi" replace /> },
+      { index: true, element: <HomeRedirect /> },
       { path: "accedi", element: <LoginPage /> },
+      { element: <RequireSession />, children: [{ path: "piano", element: <PlanPage /> }] },
       { path: "*", element: <NotFoundPage /> },
     ],
   },

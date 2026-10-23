@@ -45,6 +45,8 @@ make db-reset       # ferma e cancella il volume dei dati locali
 
 La porta host è `5432`; per cambiarla usa `MENU_PG_HOST_PORT=...`. Per avviare il server contro questo database copia `.env.example` in `.env` e compila `DATABASE_URL_APP` (e `DATABASE_URL_OWNER` per le migrazioni) con `sslmode=verify-full` e `sslrootcert=db/dev-certs/ca.crt`. Non mettere mai valori reali in `.env.example`.
 
+Per l'accesso con Google (da SL-03a) servono anche `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` e `APP_BASE_URL` (origine pubblica, senza percorso; l'URI di reindirizzamento da registrare nel client OAuth è `APP_BASE_URL/api/v1/auth/google/callback`); `OIDC_ISSUER` vale Google e in `staging` e `production` non può essere altro. In `dev` e `test` le prime due sono facoltative (i test usano un provider finto). `make e2e` usa lo stesso cluster di `make test-db`.
+
 Per avviare il backend a mano:
 
 ```bash

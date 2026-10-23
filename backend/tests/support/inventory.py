@@ -64,14 +64,22 @@ ACCOUNT_RLS_TABLES = frozenset({"session", "export_file"})
 EXPECTED_FAMILY_TABLES_NOW = frozenset(
     {"family", "family_default_meal", "person", "family_bootstrap", "course"}
 )
-# Tabelle non di famiglia presenti alla fine di SL-02 (05-data §6.3).
-EXPECTED_OTHER_TABLES_NOW = frozenset({"security_event", "alembic_version"})
+# Tabelle non di famiglia presenti alla fine di SL-03a (05-data §6.3): `security_event` (SL-02),
+# `account`, `session` (RLS per account) e `auth_flow` (SL-03a).
+EXPECTED_OTHER_TABLES_NOW = frozenset(
+    {"security_event", "alembic_version", "account", "session", "auth_flow"}
+)
+# Tabelle non di famiglia con RLS per account esistenti ora (sottoinsieme di ACCOUNT_RLS_TABLES).
+EXPECTED_ACCOUNT_RLS_NOW = frozenset({"session"})
 EXPECTED_TABLES_NOW = EXPECTED_FAMILY_TABLES_NOW | EXPECTED_OTHER_TABLES_NOW
-# docs/05-data.md §3.3: inventario SECURITY DEFINER atteso alla fine di SL-02 (tutte e solo
-# `console_*`, eseguibili solo da `menu_console`, ADR-0011).
-EXPECTED_SECDEF_NOW: frozenset[str] = frozenset(
+# docs/05-data.md §3.3: inventario SECURITY DEFINER. SL-02: le tre `console_*`, eseguibili solo
+# da `menu_console` (ADR-0011). SL-03a: `session_resolve` e `bootstrap_resolve`, eseguibili solo
+# da `menu_app` (risolvono segreti prima di conoscere l'appartenenza, 05-data §6.2).
+EXPECTED_CONSOLE_SECDEF: frozenset[str] = frozenset(
     {"console_bootstrap_family", "console_security_events", "console_audit_note"}
 )
+EXPECTED_IDENTITY_SECDEF: frozenset[str] = frozenset({"session_resolve", "bootstrap_resolve"})
+EXPECTED_SECDEF_NOW: frozenset[str] = EXPECTED_CONSOLE_SECDEF | EXPECTED_IDENTITY_SECDEF
 # docs/05-data.md §11.1 / 08 §6.7: elenco chiuso delle funzioni LANGUAGE sql (intero, a regime).
 INLINABLE_SQL_FUNCTIONS = frozenset(
     {

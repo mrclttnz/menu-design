@@ -10,7 +10,8 @@
     - niente `menu_maint`;
     - `SECURITY DEFINER` solo dove è inevitabile;
     - RLS su `session` ma non su `account`;
-  - revisione 6 (2026-10-20): tabella delle funzioni allineata a `docs/05-data.md` v5 §3.3 (I-P5).
+  - revisione 6 (2026-10-20): tabella delle funzioni allineata a `docs/05-data.md` v5 §3.3 (I-P5);
+  - revisione 7 (2026-10-23, SL-03a): firma di `session_resolve` allineata alle sei colonne di `docs/05-data.md` §6.2. Nessun cambio di decisione.
 - **Decisori:** utente, architect. Revisione del data-architect e del security-engineer.
 - **Requisiti collegati:** SR-008, SR-009, SR-011, SR-012, SR-040, SR-041, SR-042, SR-055, SR-057, SR-060, NFR-002, NFR-004, FR-030, FR-032
 - **ADR collegati:** ADR-0011 (console), ADR-0013 (worker), ADR-0014 (Supabase), ADR-0015 (backup), ADR-0016 (endpoint esposto)
@@ -65,7 +66,7 @@ L'utente chiede la soluzione più semplice che rispetti gli obblighi reali: "non
   - `export_file` ha RLS per richiedente (`p_requester`, `requester_account_id = app.current_account_id()`).
 - **RLS su `session`** (A-10, ridotta in OBJ-07):
   - `session` è leggibile e modificabile da `menu_app` solo per l'account del contesto;
-  - la risoluzione della sessione a ogni richiesta passa da `app.session_resolve(p_token_hash) → (session_id, account_id)`;
+  - la risoluzione della sessione a ogni richiesta passa da `app.session_resolve(p_token_hash) → (session_id, account_id, created_at, last_used_at, auth_time, csrf_token_hash)`, solo per sessioni valide (firma completa in `docs/05-data.md` §6.2);
   - **`account` resta senza RLS**: è accessibile solo dal modulo `identity` tramite `system_tx()`. Il costo di un'altra coppia di policy e funzioni non è giustificato a questa scala.
 
 ### Accesso ai dati

@@ -21,15 +21,161 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/google/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start Login */
+        post: operations["identity.google.start"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/google/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Google Callback
+         * @description Il valore dichiarato serve solo al contratto: i parametri si leggono con `_single`.
+         */
+        get: operations["identity.google.callback"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Session */
+        get: operations["identity.session.read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Logout */
+        post: operations["identity.session.logout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AccountView */
+        AccountView: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Displayname */
+            displayName: string;
+        };
+        /** AnonymousSession */
+        AnonymousSession: {
+            /**
+             * Authenticated
+             * @constant
+             */
+            authenticated: false;
+            /** Notices */
+            notices: components["schemas"]["NoticeView"][];
+            authOutcome?: components["schemas"]["AuthOutcomeView"] | null;
+        };
+        /** AuthOutcomeView */
+        AuthOutcomeView: {
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "not_member" | "auth_cancelled" | "auth_failed" | "reauth_wrong_account";
+            /** Params */
+            params?: {
+                [key: string]: string;
+            } | null;
+        };
+        /** AuthenticatedSession */
+        AuthenticatedSession: {
+            /**
+             * Authenticated
+             * @constant
+             */
+            authenticated: true;
+            /** Csrftoken */
+            csrfToken: string;
+            account: components["schemas"]["AccountView"];
+            family: components["schemas"]["FamilyView"] | null;
+            person: components["schemas"]["PersonView"] | null;
+            /** Privacyreviewrequired */
+            privacyReviewRequired: boolean;
+            /** Notices */
+            notices: components["schemas"]["NoticeView"][];
+            authOutcome?: components["schemas"]["AuthOutcomeView"] | null;
+        };
         /**
          * ErrorCode
          * @enum {string}
          */
         ErrorCode: "validation" | "not_found" | "forbidden" | "unauthenticated" | "reauth_required" | "reauth_wrong_account" | "csrf_failed" | "conflict" | "precondition_required" | "rate_limited" | "payload_too_large" | "family_pending_deletion" | "invite_invalid" | "code_invalid" | "age_declaration_blocked" | "already_in_family" | "last_admin" | "dish_already_planned" | "dish_not_planned" | "course_in_use" | "quota_exceeded" | "range_too_large" | "course_not_allowed" | "person_before_join" | "unsupported_media_type" | "internal";
+        /** FamilyView */
+        FamilyView: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Timezone */
+            timezone: string;
+            /**
+             * Today
+             * Format: date
+             */
+            today: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "pending_deletion";
+            /** Deletiondueat */
+            deletionDueAt?: string | null;
+        };
         /** FieldError */
         FieldError: {
             /** Field */
@@ -44,6 +190,48 @@ export interface components {
         Health: {
             /** Status */
             status: string;
+        };
+        /**
+         * LogoutRequest
+         * @description Corpo `{}`.
+         */
+        LogoutRequest: Record<string, never>;
+        /**
+         * NoticeView
+         * @description Avviso alla famiglia (SL-24). Sempre vuoto in SL-03a.
+         *
+         *     `subjectPersonId` (piano §4.2) si aggiunge con SL-24: il test di contratto di SL-03a vieta
+         *     oggi ogni nome di proprietà che contenga "subject" (cerca il `sub` di Google), da precisare.
+         */
+        NoticeView: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "admin_recovered";
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+        };
+        /** PersonView */
+        PersonView: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "admin" | "planner" | "member";
         };
         /**
          * ProblemDetails
@@ -63,6 +251,21 @@ export interface components {
             } | null;
             /** Errors */
             errors?: components["schemas"]["FieldError"][] | null;
+        };
+        /** StartRequest */
+        StartRequest: {
+            /**
+             * Purpose
+             * @enum {string}
+             */
+            purpose: "login" | "reauth";
+            /** Returnto */
+            returnTo?: string | null;
+        };
+        /** StartResponse */
+        StartResponse: {
+            /** Redirecturl */
+            redirectUrl: string;
         };
         /**
          * ValidationCode
@@ -105,6 +308,130 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Health"];
                 };
+            };
+            /** @description Errore (RFC 9457, `code` di ADR-0010) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    "identity.google.start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StartResponse"];
+                };
+            };
+            /** @description Errore (RFC 9457, `code` di ADR-0010) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    "identity.google.callback": {
+        parameters: {
+            query?: {
+                code?: string | null;
+                state?: string | null;
+                error?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ritorno alla SPA; l'esito si legge da `GET /session`. */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Errore (RFC 9457, `code` di ADR-0010) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    "identity.session.read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnonymousSession"] | components["schemas"]["AuthenticatedSession"];
+                };
+            };
+            /** @description Errore (RFC 9457, `code` di ADR-0010) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    "identity.session.logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LogoutRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Errore (RFC 9457, `code` di ADR-0010) */
             default: {

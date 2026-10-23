@@ -1,7 +1,7 @@
 # ADR-0004: Autenticazione con libreria OIDC (Authlib) e sessioni opache lato server
 
 - **Stato:** ACCEPTED (decisione dell'utente, 2026-10-18: opzione A. Le opzioni B, C e D sono respinte.)
-- **Data:** 2026-10-18 (opzioni rivalutate per Python, ADR-0002). Revisione 2 del 2026-10-19: integrazioni dal threat model, in fondo. Revisione 3 del 2026-10-19: avvio del login come `POST` ed esito del callback lato server (OBJ-04), bootstrap con `email_sha256`. Revisione 4 del 2026-10-19 (CHG-020, decisione dell'utente al gate G4): **login con email e password rinviato al backlog dopo M2**. Il testo originale resta qui sotto, marcato *[rinviato, CHG-020]*, come riferimento per quando verrà ripreso.
+- **Data:** 2026-10-18 (opzioni rivalutate per Python, ADR-0002). Revisione 2 del 2026-10-19: integrazioni dal threat model, in fondo. Revisione 3 del 2026-10-19: avvio del login come `POST` ed esito del callback lato server (OBJ-04), bootstrap con `email_sha256`. Revisione 4 del 2026-10-19 (CHG-020, decisione dell'utente al gate G4): **login con email e password rinviato al backlog dopo M2**. Il testo originale resta qui sotto, marcato *[rinviato, CHG-020]*, come riferimento per quando verrà ripreso. Revisione 5 del 2026-10-23 (SL-03a, CR-SL03a-004): token CSRF di sessione **derivato** con HMAC dal token di sessione invece che casuale e indipendente.
 - **Decisori:** utente, architect. Revisione del security-engineer.
 - **Requisiti collegati:** FR-001, FR-002, FR-003, FR-004, FR-007, FR-069, SR-001…SR-007, SR-033…SR-039, SR-043, SR-049, SR-059
 
@@ -99,7 +99,7 @@ Versioni verificate il 2026-10-18:
   - comando console di revoca globale (SR-053).
   - La risoluzione della sessione è una dipendenza FastAPI che costruisce il `RequestContext` a ogni richiesta e rilegge la membership (SR-005).
 - **CSRF:**
-  - token casuale per sessione, salvato come hash nella riga della sessione, restituito da `GET /api/v1/session` e inviato nell'header `X-CSRF-Token` su ogni richiesta non sicura;
+  - ~~token casuale per sessione~~ token per sessione **derivato dal token di sessione** (Revisione 5), salvato come hash nella riga della sessione, restituito da `GET /api/v1/session` e inviato nell'header `X-CSRF-Token` su ogni richiesta non sicura;
   - confronto con `hmac.compare_digest`;
   - in più si verificano `Origin` (o `Sec-Fetch-Site: same-origin`) contro l'origine dell'app;
   - nessun CORS.
@@ -170,6 +170,25 @@ Prevale sulle parti corrispondenti sopra.
    - **l'email mascherata non compare mai in un URL**, né nei log di accesso;
    - un esito positivo non ha `authOutcome`: la sessione è semplicemente attiva.
 4. Il diagramma del flusso 1 di `docs/04-architecture.md` (v5) riflette questa sequenza.
+
+## Revisione 5: token CSRF di sessione derivato (SL-03a, CR-SL03a-004, 2026-10-23)
+Prevale sul punto "CSRF" della Decisione per le richieste **autenticate**. Il double submit anonimo (Revisione 2, punto 4, e Revisione 3, punto 1) non cambia.
+
+1. **Derivazione:**
+   - token CSRF = `base64url(HMAC-SHA256(chiave = token di sessione, messaggio = "menu-design/csrf/v1"))`, senza padding (`menu.identity.tokens.csrf_token_for`);
+   - alla creazione della sessione si salva `session.csrf_token_hash = SHA-256(token CSRF)`. Né il token di sessione né il token CSRF si conservano in chiaro;
+   - `GET /api/v1/session` ricalcola il token dal cookie `__Host-session` ricevuto e lo restituisce;
+   - la verifica delle richieste non sicure confronta `SHA-256(X-CSRF-Token)` con `session.csrf_token_hash` usando `hmac.compare_digest`. La colonna resta come difesa in profondità: un token derivato con un'altra chiave o un altro contesto non passa.
+2. **Motivo:**
+   - `GET /api/v1/session` deve restituire **lo stesso** token a ogni chiamata (la SPA lo richiede all'avvio e a ogni ricarica, anche in più schede), ma nel database stanno solo hash (SR-037). Un token casuale salvato solo come hash non si può restituire una seconda volta; salvarlo in chiaro, o cifrato, aggiungerebbe un segreto conservato e una chiave da gestire;
+   - la derivazione è deterministica, non richiede stato in più né una chiave del server.
+3. **Esposizione:** nessuna in più rispetto al token casuale.
+   - Il token CSRF si ottiene solo con il token di sessione, e chi ha il cookie di sessione è già autenticato: può comunque chiamare `GET /api/v1/session` e leggere il token. Il CSRF protegge da richieste cross-site che *usano* il cookie senza poterlo leggere, e questo resta vero (cookie `HttpOnly`, nessun CORS, controllo di `Origin`);
+   - dal token CSRF (o dal suo hash) non si ricava il token di sessione: HMAC-SHA256 con chiave di 256 bit non è invertibile;
+   - il contesto con versione (`/v1`) separa questo uso da eventuali derivazioni future dallo stesso token.
+4. **Conseguenze:**
+   - il token CSRF vive e muore con la sessione: cambia a ogni login (nuova sessione) e sparisce con logout o revoca;
+   - **non si può ruotare il token CSRF senza ruotare la sessione.** SL-25 (elenco e revoca delle sessioni) e i lavori futuri non devono presumere un token CSRF indipendente. Se servirà ruotarlo, si ruota la sessione (nuovo token e nuova riga). Cambiare il contesto (`/v2`) non basta da solo: gli hash salvati non corrispondono più, e quindi equivale a invalidare tutte le sessioni. Un token CSRF ruotabile da solo richiederebbe di conservarlo in modo recuperabile, con una nuova revisione di questo ADR.
 
 ## Conseguenze
 - Positive: ogni requisito è implementabile e testabile. Nessun fornitore in più. Nessun token nel JavaScript.

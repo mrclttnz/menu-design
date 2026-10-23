@@ -25,6 +25,32 @@ export interface ApiClient {
   delete<T = unknown>(path: string, options?: RequestOptions): Promise<ApiResult<T>>;
 }
 
+/** Esito di una chiamata, per chi deve reagire (sessione scaduta, uscita): mai il corpo. */
+export interface ResponseInfo {
+  method: string;
+  path: string;
+  status: number;
+  code?: string;
+}
+
+/** Aggancio della sessione al client condiviso: token CSRF della sessione e reazioni agli esiti. */
+export interface ApiHooks {
+  csrfToken?: () => string | undefined;
+  onResponse?: (info: ResponseInfo) => void;
+}
+
+const CSRF_COOKIE = "__Host-csrf";
+const CSRF_HEADER = "X-CSRF-Token";
+
+function readCookie(name: string): string | undefined {
+  if (typeof document === "undefined") return undefined;
+  for (const part of document.cookie.split("; ")) {
+    const eq = part.indexOf("=");
+    if (eq > 0 && part.slice(0, eq) === name) return part.slice(eq + 1) || undefined;
+  }
+  return undefined;
+}
+
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
 // Percorso assoluto sulla stessa origine: né `//host`, né `\`, né frammento, né controlli.
@@ -66,7 +92,10 @@ async function readJson(response: Response): Promise<{ ok: true; value: unknown 
   }
 }
 
-export function createApiClient(options: { fetch?: typeof globalThis.fetch } = {}): ApiClient {
+export function createApiClient(
+  options: { fetch?: typeof globalThis.fetch; hooks?: () => ApiHooks } = {},
+): ApiClient {
+  const hooks = options.hooks ?? ((): ApiHooks => ({}));
   const doFetch: FetchLike = options.fetch ?? ((input, init) => globalThis.fetch(input, init));
 
   async function request<T>(
@@ -78,6 +107,11 @@ export function createApiClient(options: { fetch?: typeof globalThis.fetch } = {
     const headers = new Headers(opts.headers);
     headers.set("Accept", "application/json");
     if (method !== "GET") headers.set("Content-Type", "application/json");
+    if (method !== "GET" && !headers.has(CSRF_HEADER)) {
+      // Doppio invio (SR-023): token della sessione se c'è, altrimenti il cookie anonimo.
+      const token = hooks().csrfToken?.() ?? readCookie(CSRF_COOKIE);
+      if (token) headers.set(CSRF_HEADER, token);
+    }
     if (opts.ifMatch !== undefined) headers.set("If-Match", ifMatchHeader(opts.ifMatch));
     const init: RequestInit = { method, headers, credentials: "same-origin" };
     if (opts.body !== undefined) init.body = JSON.stringify(opts.body);
@@ -93,17 +127,25 @@ export function createApiClient(options: { fetch?: typeof globalThis.fetch } = {
     }
 
     const body = await readJson(response);
+    const notify = (code?: string): void => {
+      const info: ResponseInfo = {
+        method,
+        path: path.split("?")[0] ?? path,
+        status: response.status,
+      };
+      if (code !== undefined) info.code = code;
+      hooks().onResponse?.(info);
+    };
     if (response.ok) {
+      notify();
       if (!body.ok) {
         return { ok: false, status: response.status, problem: { code: "invalid_response" } };
       }
       return { ok: true, status: response.status, data: body.value as T };
     }
-    return {
-      ok: false,
-      status: response.status,
-      problem: body.ok ? problemFrom(body.value) : { code: "unknown" },
-    };
+    const problem: ProblemInfo = body.ok ? problemFrom(body.value) : { code: "unknown" };
+    notify(problem.code);
+    return { ok: false, status: response.status, problem };
   }
 
   return {
@@ -115,4 +157,14 @@ export function createApiClient(options: { fetch?: typeof globalThis.fetch } = {
   };
 }
 
-export const api: ApiClient = createApiClient();
+let sharedHooks: ApiHooks = {};
+
+/** Imposta gli agganci del client condiviso; restituisce la funzione che li toglie. */
+export function configureApi(hooks: ApiHooks): () => void {
+  sharedHooks = hooks;
+  return () => {
+    if (sharedHooks === hooks) sharedHooks = {};
+  };
+}
+
+export const api: ApiClient = createApiClient({ hooks: () => sharedHooks });

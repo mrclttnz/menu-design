@@ -58,8 +58,17 @@ test("SR-037 / THR-005: nessun dato in localStorage, sessionStorage, cookie, Ind
     databases: (await indexedDB.databases()).length,
     caches: (await caches.keys()).length,
   }));
-  expect(state).toEqual({ local: 0, session: 0, cookie: "", databases: 0, caches: 0 });
-  expect(await context.cookies()).toEqual([]);
+  expect({ ...state, cookie: "" }).toEqual({
+    local: 0,
+    session: 0,
+    cookie: "",
+    databases: 0,
+    caches: 0,
+  });
+  // SL-03a (ADR-0004 rev. 3): l'unico cookie di una visita anonima è il token CSRF `__Host-csrf`,
+  // letto dalla SPA (non HttpOnly); la sessione, quando c'è, è HttpOnly e non compare qui.
+  expect(state.cookie.split("; ").map((c) => c.split("=")[0])).toEqual(["__Host-csrf"]);
+  expect((await context.cookies()).map((c) => c.name)).toEqual(["__Host-csrf"]);
 });
 
 test("M0: nessun service worker registrato (la PWA offline arriva in M2, THR-073)", async ({

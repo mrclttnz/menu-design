@@ -13,6 +13,9 @@ dependencies = [
     "sqlalchemy>=2.1.4",
     "alembic>=1.20.0",
     "psycopg[binary]>=3.3.6",
+    "authlib>=1.9.1",
+    "joserfc>=1.7.5",
+    "httpx>=0.28.1",
 ]
 
 [dependency-groups]
@@ -24,7 +27,6 @@ dev = [
     "pytest",
     "pytest-cov",
     "pytest-randomly",
-    "httpx",
     "pytest-xdist>=3.8.0",
     "hypothesis>=6.169.1",
 ]
@@ -67,6 +69,11 @@ python_version = "3.14"
 plugins = ["pydantic.mypy"]
 mypy_path = "src"
 files = ["src", "tests", "scripts"]
+
+[[tool.mypy.overrides]]
+# Authlib non pubblica tipi (nessun py.typed): l'uso è confinato a identity/oidc.py.
+module = ["authlib.*"]
+ignore_missing_imports = true
 
 [tool.bandit]
 exclude_dirs = ["tests"]

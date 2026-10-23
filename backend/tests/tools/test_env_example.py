@@ -6,7 +6,17 @@ import pytest
 
 from support.paths import REPO
 
-REQUIRED = ("DATABASE_URL_APP", "DATABASE_URL_OWNER", "SEED_TARGET", "SEED_ALLOWED_DB_HOSTS")
+REQUIRED = (
+    "DATABASE_URL_APP",
+    "DATABASE_URL_OWNER",
+    "SEED_TARGET",
+    "SEED_ALLOWED_DB_HOSTS",
+    # SL-03a: accesso con Google (segnaposto; `OIDC_ISSUER` predefinito = Google, ASM-073)
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_CLIENT_SECRET",
+    "OIDC_ISSUER",
+    "APP_BASE_URL",
+)
 OBSOLETE = ("DB_HOST", "DB_PORT", "DB_NAME", "DB_APP_USER", "DB_APP_PASSWORD")
 
 

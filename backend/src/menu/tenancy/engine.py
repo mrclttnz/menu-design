@@ -70,20 +70,44 @@ def _require_engine() -> Engine:
     return _engine
 
 
+def bind_context(
+    tx: Tx,
+    *,
+    family_id: UUID | None = None,
+    account_id: UUID | None = None,
+    role: str | None = None,
+) -> None:
+    """Imposta (o cambia) il contesto locale della transazione già aperta `tx` (fail closed).
+
+    Serve ai flussi che attraversano più ambiti nella stessa transazione, come il primo login
+    (account, poi famiglia, poi sessione dell'account). Il valore è locale alla transazione:
+    non sopravvive al commit né al riuso della connessione dal pool (THR-026, THR-027).
+    """
+    tx.execute(
+        _SET_CONTEXT,
+        {
+            "family": "" if family_id is None else str(family_id),
+            "account": "" if account_id is None else str(account_id),
+            "role": role or "",
+        },
+    )
+
+
 @contextmanager
 def family_tx(ctx: RequestContext) -> Iterator[Tx]:
     """Transazione con `app.family_id`, `app.account_id`, `app.role` locali (fail closed)."""
     if ctx.family_id is None:
         raise ValueError("family_tx richiede un contesto con family_id")
     with _require_engine().begin() as conn:
-        conn.execute(
-            _SET_CONTEXT,
-            {
-                "family": str(ctx.family_id),
-                "account": "" if ctx.account_id is None else str(ctx.account_id),
-                "role": ctx.role or "",
-            },
-        )
+        bind_context(conn, family_id=ctx.family_id, account_id=ctx.account_id, role=ctx.role)
+        yield conn
+
+
+@contextmanager
+def account_tx(account_id: UUID) -> Iterator[Tx]:
+    """Transazione con il solo `app.account_id` (RLS per account: `session`, `p_person_self`)."""
+    with _require_engine().begin() as conn:
+        bind_context(conn, account_id=account_id)
         yield conn
 
 

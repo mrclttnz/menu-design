@@ -16,6 +16,7 @@ import psycopg
 import pytest
 
 from menu.common import email_sha256
+from support.accounts import make_account
 from support.ctx import make_ctx
 from support.export_inventory import (
     NOT_EXPORTED,
@@ -92,6 +93,7 @@ class World:
             (self.member, self.alfa, self.member_account, "member"),
             (self.beta_person, self.beta, uuid4(), "admin"),
         ):
+            make_account(owner, account_id=account)  # SL-03a: FK person.account_id
             owner.execute(
                 "insert into app.person (id, family_id, kind, status, account_id, role, "
                 "joined_on) values (%s, %s, 'account', 'active', %s, %s, '2026-01-01')",
@@ -152,7 +154,13 @@ def test_self_scope_contains_only_the_requesters_person(tenancy: Any, world: Wor
     assert str(world.member) not in blob, "nessuna persona di altri (SR-072)"
     assert str(world.member_account) not in blob
     assert "CANARY-BETA" not in blob
-    assert forbidden_columns_in(payload) == []
+    # SL-03a: il perimetro `self` comprende la PROPRIA riga `account` (email compresa, 05-data
+    # §9.3); il resto resta soggetto all'elenco delle colonne escluse. La riga `account` e le
+    # sessioni sono provate a parte in `test_identity_export.py`.
+    assert (
+        forbidden_columns_in({t: r for t, r in payload.items() if t not in {"account", "session"}})
+        == []
+    )
     assert "family_bootstrap" not in payload
 
 

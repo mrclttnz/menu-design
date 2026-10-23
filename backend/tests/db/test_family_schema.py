@@ -11,6 +11,7 @@ from uuid import UUID, uuid4
 import psycopg
 import pytest
 
+from support.accounts import make_account
 from support.owner import Owner
 
 T0 = datetime(2026, 10, 1, 12, 0, tzinfo=UTC)
@@ -43,6 +44,8 @@ def _person(owner: Owner, family: UUID, **cols: Any) -> UUID:
         "joined_on": "2026-01-01",
     }
     values.update(cols)
+    if values["account_id"] is not None:
+        make_account(owner, account_id=values["account_id"])  # SL-03a: FK person.account_id
     names = ", ".join(values)
     marks = ", ".join(["%s"] * len(values))
     owner.execute(f"insert into app.person ({names}) values ({marks})", tuple(values.values()))  # noqa: S608

@@ -9,7 +9,7 @@ from fastapi import APIRouter, FastAPI
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from menu import tenancy
+from menu import family, identity, tenancy, views
 from menu.app import health
 from menu.common import AppError
 from menu.platform import Settings, assert_all_routes_declare_authz, configure_logging
@@ -58,11 +58,12 @@ def create_app(
     configure_logging()
 
     @asynccontextmanager
-    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         tenancy.init(settings.database_url_app.get_secret_value())
         try:
             yield
         finally:
+            app.state.identity.close()
             tenancy.dispose()
 
     app = FastAPI(
@@ -77,6 +78,9 @@ def create_app(
     )
     app.state.settings = settings
     app.state.health = health.HealthProbe(health_clock)
+    # Collegamento dei protocolli (piano §2.2): `family` decide chi può entrare, `identity` esegue.
+    app.state.identity = identity.IdentityServices.build(settings)
+    app.state.login_resolver = family.FamilyOnboarding()
     _problem_json_only(app)
 
     app.add_exception_handler(AppError, app_error_handler)
@@ -86,6 +90,8 @@ def create_app(
     app.add_middleware(EnvelopeMiddleware)
 
     app.include_router(health.router)
+    app.include_router(identity.router)
+    app.include_router(views.session_router)
     for router in extra_routers:
         app.include_router(router)
     assert_all_routes_declare_authz(app)

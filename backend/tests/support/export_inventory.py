@@ -13,6 +13,11 @@ NOT_EXPORTED: dict[str, str] = {
     "famiglia: assente dal perimetro di 05-data §9.3",
 }
 
+# Tabelle NON di famiglia che un contributore può dichiarare perché entrano nel perimetro `self`
+# (05-data §9.3: «la propria riga `account`, le proprie sessioni»). Le dichiara `identity` (SL-03a)
+# e solo `identity`; nel perimetro `family` non producono mai righe.
+NON_FAMILY_EXPORTED = frozenset({"account", "session"})
+
 # Colonne mai ammesse nell'output dei due perimetri (05-data §9.3, SR-072, plan §2.2).
 FORBIDDEN_EXPORT_COLUMNS = frozenset(
     {
@@ -38,6 +43,7 @@ def export_inventory_problems(
     contributors: Mapping[str, Iterable[str]],
     family_tables: Iterable[str],
     not_exported: Mapping[str, str] = NOT_EXPORTED,
+    non_family_exported: Iterable[str] = NON_FAMILY_EXPORTED,
 ) -> list[str]:
     """`contributors`: nome del contributore -> tabelle dichiarate."""
     problems: list[str] = []
@@ -55,7 +61,12 @@ def export_inventory_problems(
             problems.append(f"{table}: tabella di famiglia senza ExportContributor")
         elif len(owners) > 1:
             problems.append(f"{table}: dichiarata da più contributori {sorted(owners)}")
+    allowed_extra = set(non_family_exported)
     for table in sorted(set(claims) - expected):
+        if table in allowed_extra:
+            if len(claims[table]) > 1:
+                problems.append(f"{table}: dichiarata da più contributori {sorted(claims[table])}")
+            continue
         problems.append(f"{table}: dichiarata da {sorted(claims[table])} ma non è di famiglia")
     for table in sorted(set(not_exported) - expected):
         problems.append(f"{table}: voce di NOT_EXPORTED senza tabella di famiglia")

@@ -109,6 +109,7 @@ DUMMY_DB_URL = postgresql+psycopg://menu_app:$(DUMMY_DB_PW)@localhost:1/menu?ssl
 DUMMY_DB_PW  = dummy-run-web-never-connected
 run-web: web-build sync
 	cd $(BACKEND) && APP_ENV=test TRUSTED_PROXY_HOPS=0 WEB_DIST_DIR="$(CURDIR)/$(WEB)/dist" \
+	  APP_BASE_URL="http://127.0.0.1:$(WEB_PORT)" \
 	  DATABASE_URL_APP='$(DUMMY_DB_URL)' \
 	  $(UV) run --frozen python -m menu serve --host 127.0.0.1 --port $(WEB_PORT)
 
@@ -146,11 +147,13 @@ test-conc: sync $(ENSURE_DB)
 	  echo "--- concorrenza: ripetizione $$i/$(CONC_REPEAT)"; \
 	  ( $(RUN) pytest tests/concurrency -n $(CONC_WORKERS) ) || exit 1; done
 
-# Playwright avvia da solo il server FastAPI che serve web/dist (E2E_BASE_URL: server gia' avviato).
+# Playwright avvia da solo lo stack di backend/tests/support/e2e_stack.py: database di prova sul
+# cluster di test (come `make test-db`: serve `make dev`, o MENU_TEST_PG_* in CI), provider OIDC
+# finto e il server FastAPI che serve web/dist (E2E_BASE_URL: server gia' avviato).
 # Chromium: `cd web && pnpm exec playwright install chromium` (in CI con --with-deps).
-e2e: web-install
+e2e: web-install $(ENSURE_DB)
 	$(PNPM) run build
-	$(PNPM) run test:e2e
+	$(PG_ENV); $(PNPM) run test:e2e
 lighthouse:
 	$(call todo,SL-06a,lighthouse)
 perf:

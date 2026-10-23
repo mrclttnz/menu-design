@@ -162,7 +162,6 @@ def test_spa_routes_fall_back_to_index_html(static_client: TestClient, path: str
         "/api/v1/",
         "/api",
         "/api/",
-        "/api/v1/session",  # esisterà in SL-03a: qui l'API non c'è ancora e non va in index.html
     ],
 )
 def test_unknown_api_paths_never_fall_back_to_html(static_client: TestClient, path: str) -> None:

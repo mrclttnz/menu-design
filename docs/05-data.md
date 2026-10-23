@@ -1,6 +1,13 @@
 # Modello dei dati: Menu Design
 
-> Documento di proprietà del data-architect. Versione 6, 2026-10-22. **Stato: APPROVATO al gate G3** (2026-10-19, versione 4). La versione 5 contiene le correzioni per il gate G4, da approvare con il piano. La versione 6 contiene le correzioni emerse dalla prima esecuzione reale del DDL (SL-02).
+> Documento di proprietà del data-architect. Versione 7, 2026-10-23. **Stato: APPROVATO al gate G3** (2026-10-19, versione 4). La versione 5 contiene le correzioni per il gate G4, da approvare con il piano. La versione 6 contiene le correzioni emerse dalla prima esecuzione reale del DDL (SL-02). La versione 7 contiene quelle di SL-03a (migrazione `0005`).
+>
+> **Novità della versione 7** (2026-10-23, SL-03a: migrazione `0005` eseguita su PostgreSQL 17, con `upgrade`, `downgrade -1` e `base ↔ head`):
+> - **`auth_flow` conserva l'esito del callback** (ADR-0004 rev. 3, colmata la lacuna della v6): colonne `consumed_at`, `outcome_code`, `outcome_params`. Il callback reclama la riga una sola volta, il successo la cancella, un esito negativo resta leggibile **una volta** per al massimo 5 minuti dal consumo (sezione 4.1). `purpose` ammette per ora solo `login` e `reauth`: `invite` arriva con `invite_id` (ordine 14 del piano).
+> - **Scadenze delle sessioni in ore** (720 e 2160) anche nelle policy e in `session_resolve`, con i confini inclusi (esattamente 30 o 90 giorni = ancora valida). Le policy di pulizia si chiamano `p_session_expired_select` e `p_session_expired_delete` e valgono solo senza contesto di account (`app.current_account_id() IS NULL`, SEC-SL03a-001; sezione 6.1).
+> - `bootstrap_resolve`: scadenza **inclusa** (`expires_at >= app.now_utc()`), più righe possibili per lo stesso hash, ordinate per creazione (sezione 6.2).
+> - `account.email` resta `varchar(254)`: è un dato di Google che l'app valida prima dell'`INSERT`, quindi l'eccezione alla regola "`text` + `CHECK`" della v6 è voluta (un valore troppo lungo dà 22001). Vincoli aggiunti: formato minimo dell'email, `auth_subject` non vuoto, `session.ip_prefix` già troncato (famiglia, maschera e bit di host azzerati), `auth_flow.code_verifier` nell'alfabeto di RFC 7636.
+> - Nome dell'indice secondo la convenzione: `ix_session_account_id`.
 >
 > **Novità della versione 6** (2026-10-22, SL-02: migrazioni `0002`-`0004` eseguite su PostgreSQL 17, con `upgrade`, `downgrade -1` e `base ↔ head` per ogni revisione):
 > - **Testi con lunghezza massima come `text` + `CHECK`**, non `varchar(n)`: `family.name`, `person.display_name`, `course.name` (e d'ora in poi i nomi e le note delle tabelle future). Con `varchar(n)` un valore troppo lungo dà `string_data_right_truncation` (22001) *prima* del `CHECK`, quindi senza il nome del vincolo; con `text` l'errore è sempre `check_violation` (23514) con il nome del vincolo, che l'app traduce in modo uniforme. I `CHECK` sono scritti come `char_length(x) BETWEEN 1 AND n AND btrim(x) <> ''` (il solo `char_length(btrim(x)) BETWEEN 1 AND n` ammetteva valori lunghi con spazi). `security_event.event_type` e `target_type` restano `varchar` (non sono testi dell'utente).
@@ -64,7 +71,7 @@
 >
 > Fonti: `docs/02-requirements.md` (v2, approvato G2, con CHG-001 … CHG-020), `docs/01-vision.md` (rev. 7), `docs/04-architecture.md` (v6), ADR-0001 … ADR-0016, `docs/07-plan.md` §11.2, `docs/08-test-strategy.md` (v2), `security-standard.md` di Bottega (§3, §7, §8).
 >
-> **Stato di verifica:** **eseguiti e verificati su PostgreSQL 17** (SL-02, migrazioni `0002`-`0004`): `family`, `family_default_meal`, `person`, `family_bootstrap`, `course`, i loro trigger e policy, `app.family_today()`, `security_event` e le funzioni `console_bootstrap_family`, `console_security_events`, `console_audit_note`. Il resto del DDL e delle funzioni **non è ancora stato eseguito**: lo verifica la slice che lo crea, e le correzioni tornano qui. Le stime di spazio sono analitiche e vanno misurate (vedi "Stima dello spazio").
+> **Stato di verifica:** **eseguiti e verificati su PostgreSQL 17** (SL-02, migrazioni `0002`-`0004`): `family`, `family_default_meal`, `person`, `family_bootstrap`, `course`, i loro trigger e policy, `app.family_today()`, `security_event` e le funzioni `console_bootstrap_family`, `console_security_events`, `console_audit_note`. **SL-03a, migrazione `0005`:** `account`, la FK `person.account_id`, `session` con le sue policy, `auth_flow`, `session_resolve`, `bootstrap_resolve`. Il resto del DDL e delle funzioni **non è ancora stato eseguito**: lo verifica la slice che lo crea, e le correzioni tornano qui. Le stime di spazio sono analitiche e vanno misurate (vedi "Stima dello spazio").
 >
 > Convenzioni:
 > - schema applicativo `app`, estensioni nello schema `extensions` (convenzione Supabase);
@@ -271,7 +278,7 @@ Sono 18 funzioni fino a M1 e 21 con M2. Il conteggio è più alto della stima di
 **Nomi (I-P5).** Le funzioni del worker e del ripristino hanno il prefisso `maint_` di ADR-0003, così il gruppo si riconosce nell'inventario. `purge_family_exports` non ha il prefisso: non è manutenzione, la chiama l'app dentro un cambio di ruolo o un'uscita (sezioni 7.3 e 11). Tutte le funzioni `SECURITY DEFINER` sono `LANGUAGE plpgsql`: con `SET search_path` non sarebbero comunque inlinabili, e così compaiono sempre in `pg_stat_user_functions`.
 
 **Differenze con la tabella di ADR-0003 (rev. 5), da allineare nell'ADR.** L'insieme di questa sezione segue la regola dello stesso ADR, "`SECURITY DEFINER` solo dove è inevitabile":
-- `maint_purge_sessions`, `maint_purge_exports`: **non esistono**. Le pulizie sono SQL normale grazie alle policy `p_session_expired` e `p_export_expired` (sezione 6.1);
+- `maint_purge_sessions`, `maint_purge_exports`: **non esistono**. Le pulizie sono SQL normale grazie alle policy `p_session_expired_select`/`p_session_expired_delete` e `p_export_expired` (sezione 6.1);
 - `maint_purge_invites_codes`: **non esiste**. Inviti e bootstrap si puliscono nel passaggio notturno per famiglia con `family_tx`, i codici di M2 in `system_tx` (sezione 3.4);
 - `maint_role_activity`: **non è privilegiata**. È SQL normale su `pg_stat_activity`, dove `usename` e `backend_start` sono visibili a ogni ruolo (sezione 3.4);
 - mancano nell'ADR: `maint_purge_family_notices` (`menu_app` non ha `DELETE` su `family_notice`), `maint_db_size` e `purge_family_exports`.
@@ -336,7 +343,7 @@ Anche `console_enqueue_export` scrive un evento per ogni esito, con le stesse re
 |---|---|---|---|
 | Passaggio notturno per famiglia | M1 (M0: solo pulizia) | `maint_families_needing_freeze()` restituisce gli ID. Per ognuno, in `family_tx`:<br>- `ensure_frozen()`;<br>- cancellazione di `invite` e `family_bootstrap` scaduti, usati, rifiutati o revocati da oltre 30 giorni (SR-019).<br>Ogni famiglia compare una volta al giorno, dopo la mezzanotte locale. | Ogni esecuzione |
 | Flussi temporanei | M0 | `system_tx`: `DELETE FROM auth_flow WHERE expires_at < app.now_utc()`, poi `signup_pending` scaduti o più vecchi di 24 ore (SR-049) | Ogni ora |
-| Sessioni scadute | M0 | `system_tx`: `DELETE FROM session WHERE last_used_at < app.now_utc()-'30 days' OR created_at < app.now_utc()-'90 days'`. Le righe scadute sono visibili grazie alla policy `p_session_expired` (sezione 6.1). | Ogni giorno |
+| Sessioni scadute | M0 | `system_tx`: `DELETE FROM session WHERE last_used_at < app.now_utc() - interval '720 hours' OR created_at < app.now_utc() - interval '2160 hours'`. Le righe scadute sono visibili e cancellabili solo senza contesto di account grazie alle policy `p_session_expired_select` e `p_session_expired_delete` (sezione 6.1). | Ogni giorno |
 | Limiti di frequenza | M0 | `system_tx`: finestre di `rate_counter` più vecchie di 2 giorni (comprese quelle giornaliere di SR-070). I `rate_block` scaduti solo se la tabella torna con FR-002 (sezione 4.3). | Ogni ora |
 | Esportazioni scadute | M1 | `system_tx`: `DELETE FROM export_file WHERE expires_at <= app.now_utc()`, tramite la policy `p_export_expired` | Ogni esecuzione |
 | Job terminati | M1 | `system_tx`: job `done`, `failed` o `cancelled` terminati da oltre 30 giorni | Ogni giorno |
@@ -367,13 +374,13 @@ Notazione: **PK** chiave primaria, **UQ** unico, **FK** chiave esterna, **CK** c
 |---|---|---|---|---|---|
 | id | uuid | no | `gen_random_uuid()` | PK | Esposto all'API |
 | auth_provider | text | no | `'google'` | CK in (`google`) | Nell'MVP l'unico metodo è Google (CHG-020). La colonna resta perché fa parte della chiave dell'identità (SR-033) e perché `password` si aggiunge allargando il `CHECK`, senza toccare la chiave (sezione 4.3). |
-| auth_subject | varchar(255) | no | | UQ (`auth_provider`, `auth_subject`) | `sub` di Google: chiave dell'identità (SR-033). `NOT NULL` finché esiste solo Google (sezione 4.3 per il ritorno di FR-002). |
-| email | varchar(254) | no | | CK lunghezza ≤ 254 e formato minimo | Email verificata di Google, aggiornata a ogni login. **Non** unica: l'identità è il `sub`, non l'email (SR-033). L'unicità parziale su `lower(email)` è rinviata con FR-002 (sezione 4.3). |
+| auth_subject | varchar(255) | no | | UQ (`auth_provider`, `auth_subject`). CK `auth_subject <> ''` | `sub` di Google: chiave dell'identità (SR-033). `NOT NULL` finché esiste solo Google (sezione 4.3 per il ritorno di FR-002). |
+| email | varchar(254) | no | | `ck_account_email`: `char_length(email) BETWEEN 3 AND 254 AND email ~ '^[^@[:space:][:cntrl:]]+@[^@[:space:][:cntrl:]]+$'` | Email verificata di Google, aggiornata a ogni login. **Non** unica: l'identità è il `sub`, non l'email (SR-033). L'unicità parziale su `lower(email)` è rinviata con FR-002 (sezione 4.3). Resta `varchar(254)` e non `text` + `CHECK` (v6): non è un testo dell'utente, e l'app la valida prima dell'`INSERT`. Un valore oltre 254 caratteri dà quindi `string_data_right_truncation` (22001), non `check_violation`. |
 | email_sha256 | bytea | sì | | CK `octet_length(email_sha256) = 32`. **Non** unico. | Scritto dal servizio con `menu.common.email_sha256` alla creazione e a ogni cambio dell'email. Serve solo alle funzioni della console (recupero, esportazione), che lo confrontano con l'hash ricevuto. Nessun indice: circa 250 righe. Non è unico perché l'email non è unica: Google può riassegnare un indirizzo a un nuovo account (nuovo `sub`, per esempio un account Workspace ricreato), e il vecchio account resta finché non viene eliminato. Le funzioni della console trattano il caso come `not_eligible`. Se FR-002 viene ripreso, si aggiunge il caso di un account Google e uno con password con lo stesso indirizzo (SR-034). |
 | email_verified_at | timestamptz | sì | | | Istante del login con `email_verified=true` |
 | display_name | text | no | | CK `char_length(display_name) BETWEEN 1 AND 60 AND btrim(display_name) <> ''` | Proposto da Google alla creazione, poi solo modificabile dall'utente (SR-054) |
 | age_declared_at | timestamptz | sì | | | Dichiarazione "ho almeno 14 anni" (SR-013). Nessuna data di nascita. È nulla solo per l'account di bootstrap fino alla prima presa visione (ASM-064). |
-| privacy_version | varchar(20) | sì | | CK coppia: entrambi nulli o entrambi valorizzati | Versione dell'informativa presa in visione (SR-056) |
+| privacy_version | varchar(20) | sì | | `ck_account_privacy_pair`: `(privacy_version IS NULL) = (privacy_ack_at IS NULL)`. CK non vuota. | Versione dell'informativa presa in visione (SR-056) |
 | privacy_ack_at | timestamptz | sì | | | |
 | last_active_on | date | sì | | | Giorno (UTC) dell'ultimo uso, aggiornato al massimo una volta al giorno. Serve solo per SR-050. |
 | last_visit_at | timestamptz | sì | | | **M1, FR-046.** Istante dell'ultima apertura del piano, uno per account (decisione dell'utente, 2026-10-18). L'apertura del piano restituisce il valore **precedente**, che il client usa per l'indicatore "modificato da altri dopo la tua ultima visita", e poi lo aggiorna a `app.now_utc()`, al massimo una volta al minuto. Non si conservano altri dettagli di navigazione. |
@@ -390,12 +397,16 @@ Colonne dell'apertura al pubblico (SR-050), aggiunte con una migrazione additiva
 | id | uuid | no | `gen_random_uuid()` | PK | Handle pubblico per elenco e revoca (SR-038). **Non** è il token. |
 | account_id | uuid | no | | FK → `account(id)` ON DELETE CASCADE | |
 | token_hash | bytea | no | | UQ. CK `octet_length = 32` | SHA-256 del token di 256 bit (SR-037) |
-| csrf_token_hash | bytea | no | | CK `octet_length = 32` | ADR-0004 |
+| csrf_token_hash | bytea | no | | CK `octet_length = 32` | SHA-256 del token CSRF della sessione, che non è casuale ma derivato: `HMAC-SHA256(token di sessione, "menu-design/csrf/v1")` in base64url. `GET /session` lo ricalcola dal cookie; la verifica confronta l'hash dell'header con questa colonna (ADR-0004 rev. 5) |
 | created_at | timestamptz | no | `app.now_utc()` | | Scadenza assoluta a 90 giorni |
-| last_used_at | timestamptz | no | `app.now_utc()` | | Aggiornato al massimo una volta all'ora. Scadenza mobile a 30 giorni. |
+| last_used_at | timestamptz | no | `app.now_utc()` | | Aggiornato al massimo una volta all'ora. Scadenza mobile a 30 giorni. Nessun CK rispetto a `created_at`. |
 | auth_time | timestamptz | no | | | Riautenticazione (SR-039) |
-| device_label | varchar(80) | sì | | | Per esempio "Chrome · Android", ricavato dallo user agent. Lo user agent completo non si conserva. |
-| ip_prefix | inet | sì | | CK `masklen(ip_prefix) IN (24, 48)` | IP già troncato alla creazione. Non si mostra (AC-047.1). |
+| device_label | varchar(80) | sì | | CK non vuota | Per esempio "Chrome · Android", ricavato dallo user agent. Lo user agent completo non si conserva. |
+| ip_prefix | inet | sì | | `ck_session_ip_prefix`: IPv4 con `masklen = 24` oppure IPv6 con `masklen = 48`, e `ip_prefix = network(ip_prefix)` (bit di host azzerati) | IP già troncato alla creazione (SR-051): `203.0.113.0/24` sì, `203.0.113.77/24` no. Non si mostra (AC-047.1). |
+
+Indice `ix_session_account_id (account_id)` (sezione 5). FK, `UNIQUE` e `CHECK` hanno i nomi della convenzione (sezione 12), per esempio `uq_session_token_hash`, `fk_session_account_id_account`.
+
+Validità di una sessione, uguale in `session_resolve` e nelle policy di pulizia: `last_used_at >= app.now_utc() - interval '720 hours' AND created_at >= app.now_utc() - interval '2160 hours'`. I confini sono inclusi: una sessione usata esattamente 30 giorni fa, o creata esattamente 90 giorni fa, è ancora valida (AC-001.3, provato al secondo).
 
 #### auth_flow (M0)
 Stato del flusso OIDC (ADR-0004), referenziato dal cookie `__Host-auth_flow`.
@@ -403,15 +414,29 @@ Stato del flusso OIDC (ADR-0004), referenziato dal cookie `__Host-auth_flow`.
 | Campo | Tipo | Null | Default | Vincoli | Note |
 |---|---|---|---|---|---|
 | handle_hash | bytea | no | | PK. CK `octet_length = 32` | SHA-256 del valore del cookie |
-| purpose | text | no | | CK in (`login`, `reauth`, `invite`) | `invite` da M1 (threat model A-02, THR-033) |
-| session_id | uuid | sì | | FK → `session(id)` ON DELETE CASCADE. CK `(purpose='reauth') = (session_id IS NOT NULL)` | |
-| invite_id | uuid | sì | | FK → `invite(id)` ON DELETE CASCADE. CK `(purpose='invite') = (invite_id IS NOT NULL)` | **Solo l'ID dell'invito**, mai il segreto. La SPA invia il segreto con un `POST` anonimo prima del login, e il server lo risolve con `invite_resolve`. Il browser non conserva il segreto. Al callback il server rilegge l'invito, che deve essere ancora `pending` e valido. |
-| return_to | varchar(200) | sì | | CK `return_to ~ '^/[A-Za-z0-9/_.?=&-]*$' AND return_to !~ '^//'` | Percorso relativo di ritorno, salvato all'avvio (A-03). Lo si confronta anche con una allow-list in codice. |
+| purpose | text | no | | CK in (`login`, `reauth`); `invite` si aggiunge con `invite_id` (ordine 14 del piano, M1) | `invite` da M1 (threat model A-02, THR-033) |
+| session_id | uuid | sì | | FK → `session(id)` ON DELETE CASCADE. CK `(purpose='reauth') = (session_id IS NOT NULL)` | Nessun indice: poche decine di righe, la cascata dalla sessione costa una scansione minima |
+| invite_id (M1) | uuid | sì | | FK → `invite(id)` ON DELETE CASCADE. CK `(purpose='invite') = (invite_id IS NOT NULL)` | **Solo l'ID dell'invito**, mai il segreto. La SPA invia il segreto con un `POST` anonimo prima del login, e il server lo risolve con `invite_resolve`. Il browser non conserva il segreto. Al callback il server rilegge l'invito, che deve essere ancora `pending` e valido. |
+| return_to | varchar(200) | sì | | CK `return_to ~ '^/[A-Za-z0-9/_.?=&-]*$' AND return_to !~ '^//'` | Percorso relativo di ritorno, salvato all'avvio (A-03). Lo si confronta anche con una allow-list in codice. Un valore non ammesso o oltre i 200 caratteri non si salva: si torna a `/piano`. |
 | state_hash | bytea | no | | CK `octet_length = 32` | Si confronta l'hash dello `state` ricevuto |
 | nonce_hash | bytea | no | | CK `octet_length = 32` | Si confronta l'hash del `nonce` del token ID |
-| code_verifier | varchar(128) | no | | CK lunghezza 43-128 | Va inviato a Google in chiaro, quindi si conserva in chiaro per al massimo 10 minuti. Monouso: la riga si cancella al callback. |
+| code_verifier | varchar(128) | no | | CK lunghezza 43-128 e alfabeto `^[A-Za-z0-9._~-]+$` (RFC 7636) | Va inviato a Google in chiaro, quindi si conserva in chiaro per al massimo 15 minuti (10 prima del callback, 5 dopo il consumo). Monouso: la riga si consuma al callback. |
 | created_at | timestamptz | no | `app.now_utc()` | | |
-| expires_at | timestamptz | no | | CK `expires_at <= created_at + interval '10 minutes'` | |
+| expires_at | timestamptz | no | | `ck_auth_flow_expires_at`: `expires_at > created_at AND expires_at <= CASE WHEN consumed_at IS NULL THEN created_at + interval '10 minutes' ELSE consumed_at + interval '5 minutes' END` | 10 minuti per completare il login; dal consumo, 5 minuti per leggere l'esito (ADR-0004 rev. 3) |
+| consumed_at | timestamptz | sì | | CK `consumed_at >= created_at` | Istante del callback che ha reclamato il flusso. Non nullo = flusso già usato: `state`, `nonce` e `code_verifier` non valgono più. |
+| outcome_code | text | sì | | CK in (`not_member`, `auth_cancelled`, `auth_failed`, `reauth_wrong_account`). CK `outcome_code IS NULL OR consumed_at IS NOT NULL` | Esito negativo del callback, letto una volta da `GET /api/v1/session` come `authOutcome.code`. `invite_invalid` si aggiunge con `purpose='invite'` (M1). Un accesso riuscito non ha esito: la riga si cancella. |
+| outcome_params | jsonb | sì | | CK `outcome_params IS NULL OR (outcome_code IS NOT NULL AND jsonb_typeof(outcome_params) = 'object' AND pg_column_size(outcome_params) <= 512)` | `authOutcome.params`, per esempio `{"expectedEmailMasked": "a***@example.test"}` per `reauth_wrong_account` (ADR-0004 rev. 2). Mai email in chiaro, `sub`, token o nomi di altre famiglie. |
+
+**Ciclo di vita** (ADR-0004 rev. 3). Ogni passo è un'unica istruzione atomica, in `system_tx`:
+1. **Avvio:** `INSERT` con `expires_at = app.now_utc() + interval '10 minutes'`.
+2. **Callback, reclamo monouso** prima dello scambio del codice: `UPDATE auth_flow SET consumed_at = app.now_utc(), expires_at = app.now_utc() + interval '5 minutes' WHERE handle_hash = :h AND consumed_at IS NULL AND expires_at > app.now_utc() RETURNING …`. Zero righe vuol dire flusso assente, scaduto o già usato: `302` senza sessione. Due callback concorrenti con lo stesso cookie: uno solo ottiene la riga (THR-002).
+3. **Esito:**
+   - con un **successo**, `DELETE` della riga nella transazione che crea la sessione, e cookie cancellato;
+   - con un **esito negativo**, `UPDATE … SET outcome_code = …, outcome_params = …` sulla riga reclamata, e il cookie resta.
+4. **Lettura una sola volta:** `DELETE FROM auth_flow WHERE handle_hash = :h AND outcome_code IS NOT NULL AND expires_at > app.now_utc() RETURNING outcome_code, outcome_params`. Poi il cookie si cancella. Una seconda lettura non trova nulla. Senza il cookie dello stesso browser l'esito non si legge.
+5. **Pulizia:** le righe scadute, usate o no, le cancella il worker ogni ora (sezione 3.4).
+
+Hash e `code_verifier` restano `NOT NULL` anche dopo il consumo: è `consumed_at` a renderli inutilizzabili, e la riga vive al massimo 5 minuti in più.
 
 #### signup_pending (M1)
 Stato temporaneo di chi ha completato il login Google ma non ha ancora un account (SR-049): passo "dichiarazione di età + informativa" prima dell'accettazione di un invito (M1) o dell'uso di un codice (M2). Cookie `__Host-signup`. In M0 non serve, perché il bootstrap crea l'account subito.
@@ -570,7 +595,7 @@ Ricerca prima dell'appartenenza: `app.bootstrap_resolve(email)` (sezione 6.2).
 | family_id | uuid | no | | FK → `family` ON DELETE CASCADE | |
 | kind | text | no | | CK in (`account`, `profile`) | Resta anche nel tombstone, per distinguere "ex membro" da "persona eliminata" |
 | status | text | no | `'active'` | CK in (`active`, `former`) | `former` = tombstone |
-| account_id | uuid | sì | | FK → `account(id)` ON DELETE **RESTRICT** (aggiunta in SL-03a con `account`; in SL-02 la colonna esiste senza FK) | Un account non si cancella finché ha una persona attiva: si passa dalla procedura della sezione 9.2 |
+| account_id | uuid | sì | | `fk_person_account_id_account` → `account(id)` ON DELETE **RESTRICT** (migrazione `0005`, SL-03a; in `0002` la colonna esiste senza FK). Il controllo della FK usa `ux_person_account_single_family`. | Un account non si cancella finché ha una persona attiva: si passa dalla procedura della sezione 9.2 |
 | role | text | sì | | CK in (`admin`, `planner`, `member`) | |
 | display_name | text | sì | | CK `char_length BETWEEN 1 AND 60 AND btrim <> ''` | **Solo per i profili.** Per gli account il nome sta in `account`. |
 | guardian_declared_at | timestamptz | sì | | | Dichiarazione di responsabilità genitoriale (SR-064) |
@@ -907,7 +932,7 @@ Ogni indice è giustificato da una query o da un vincolo. Le PK e gli UQ elencat
 |---|---|---|
 | account | UQ (`auth_provider`, `auth_subject`) | Login: ricerca per `sub` a ogni callback (SR-033) |
 | session | UQ `token_hash` | Risoluzione della sessione a ogni richiesta (NFR-002) |
-| session | `ix_session_account (account_id)` | Elenco e revoca delle proprie sessioni (SR-038), revoca alla promozione (SR-066), cascata dall'account |
+| session | `ix_session_account_id (account_id)` | Elenco e revoca delle proprie sessioni (SR-038), revoca alla promozione (SR-066), cascata dall'account, massimo 20 sessioni (SR-070) |
 | person | `ux_person_account_single_family (account_id) WHERE account_id IS NOT NULL` | ASM-050 atomico. Risoluzione della membership a ogni richiesta, tramite la policy `p_person_self`. |
 | invite | UQ `token_hash` | Risoluzione dell'invito tramite hash (SR-043) |
 | invite | `ix_invite_family_created (family_id, created_at)` | Elenco degli inviti, conteggio di quelli in sospeso e dei 20 al giorno (SR-063) |
@@ -957,7 +982,7 @@ Eccezioni alla policy standard:
 **Tabelle con RLS per account** (non di famiglia), sempre con `ENABLE` e `FORCE` e con le policy `p_owner` e `p_backup`:
 - **`session`** (decisione dell'utente, 2026-10-19):
   - `p_session_self FOR ALL TO menu_app USING (account_id = app.current_account_id()) WITH CHECK (…)`;
-  - `p_session_expired FOR SELECT, DELETE TO menu_app USING (last_used_at < app.now_utc() - interval '30 days' OR created_at < app.now_utc() - interval '90 days')`, scritta come due policy, una per comando, che permette la pulizia del worker. Le righe scadute non danno accesso, perché `session_resolve` le ignora.
+  - `p_session_expired_select FOR SELECT` e `p_session_expired_delete FOR DELETE`, `TO menu_app USING ((last_used_at < app.now_utc() - interval '720 hours' OR created_at < app.now_utc() - interval '2160 hours') AND app.current_account_id() IS NULL)`: due policy, una per comando, che permettono la pulizia del worker **solo senza contesto di account**. Nessuna policy di `UPDATE` sulle righe scadute: una sessione scaduta non si riesuma. Le righe scadute non danno accesso, perché `session_resolve` le ignora. La condizione `app.current_account_id() IS NULL` è necessaria perché le policy permissive si sommano (OR) a `p_session_self`: senza di essa una transazione con il contesto dell'account A vedrebbe e potrebbe cancellare le sessioni scadute di qualsiasi altro account. Quelle righe non contengono solo hash e istanti, ma anche dati personali di altre famiglie: `account_id`, `device_label`, `ip_prefix`, `created_at`, `last_used_at` (SEC-SL03a-001). Con il contesto di A restano quindi visibili solo le sessioni di A, scadute o no (`p_session_self`); il worker purga senza contesto. Test: `tests/db/test_session_rls.py`.
   - La risoluzione del cookie passa da `session_resolve` (sezione 6.2). La creazione al login avviene con `app.account_id` già impostato sull'account autenticato.
 - **`export_file`:**
   - `p_requester` (sezione 4.1);
@@ -967,8 +992,10 @@ Eccezioni alla policy standard:
 ### 6.2 Risoluzione prima dell'appartenenza
 Due funzioni `SECURITY DEFINER`, eseguibili solo da `menu_app`, restituiscono **solo ID** e solo per segreti validi:
 - `app.invite_resolve(p_token_hash bytea) → (invite_id uuid, family_id uuid)`: solo se `status='pending'` e `expires_at > app.now_utc()`. Se il profilo collegato non è più attivo, non restituisce righe (AC-037.7). La lettura non consuma nulla (SR-043).
-- `app.bootstrap_resolve(p_email_sha256 bytea) → (bootstrap_id uuid, family_id uuid)`: solo se il bootstrap non è riscattato né scaduto. L'app calcola l'hash dall'email verificata del token ID con `menu.common.email_sha256`.
-- `app.session_resolve(p_token_hash bytea) → (session_id, account_id, created_at, last_used_at, auth_time, csrf_token_hash)`: solo se la sessione non è scaduta (30 e 90 giorni). Dopo la risoluzione `identity` imposta `app.account_id`, e ogni altra operazione sulla sessione (aggiornamento di `last_used_at`, elenco, revoca) passa dalla RLS per account.
+- `app.bootstrap_resolve(p_email_sha256 bytea) → TABLE (bootstrap_id uuid, family_id uuid)`: solo se il bootstrap non è riscattato (`redeemed_at IS NULL`) e non è scaduto, con la **scadenza inclusa**: `expires_at >= app.now_utc()` (un bootstrap di esattamente 168 ore vale ancora, AC-002.4). L'app calcola l'hash dall'email verificata del token ID con `menu.common.email_sha256`, e la funzione confronta solo i byte. Due bootstrap per la stessa email (due famiglie, sezione 3.3) danno due righe, ordinate per (`created_at`, `id`): l'app riscatta la prima, e l'indice `ux_person_account_single_family` impedisce comunque una seconda famiglia (ASM-050). Il riscatto in `family_tx` usa lo stesso predicato: `UPDATE family_bootstrap SET redeemed_at = app.now_utc(), redeemed_person_id = :p, email_sha256 = NULL WHERE id = :b AND redeemed_at IS NULL AND expires_at >= app.now_utc()`. Zero righe = bootstrap già riscattato da un login concorrente. Nessun indice su `email_sha256`: la tabella ha al massimo qualche decina di righe.
+- `app.session_resolve(p_token_hash bytea) → TABLE (session_id uuid, account_id uuid, created_at timestamptz, last_used_at timestamptz, auth_time timestamptz, csrf_token_hash bytea)`: solo se la sessione è valida, con i confini inclusi (sezione 4.1, `session`). Usa `uq_session_token_hash`. Un hash di lunghezza sbagliata o sconosciuto restituisce zero righe, senza errore. Dopo la risoluzione `identity` imposta `app.account_id`, e ogni altra operazione sulla sessione (aggiornamento di `last_used_at`, elenco, revoca) passa dalla RLS per account.
+
+Entrambe sono `LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = app, pg_temp`, di proprietà di `menu_owner`, con `EXECUTE` revocato a `PUBLIC` e concesso al solo `menu_app` (non a `menu_console` né a `menu_backup`). Leggono come `menu_owner` grazie alla policy `p_owner`.
 
 Dopo la risoluzione, `identity` apre `family_tx` per quella famiglia e consuma in modo atomico con `UPDATE invite SET status='accepted', … WHERE id=:i AND status='pending' AND expires_at > app.now_utc()`. Zero righe aggiornate producono la risposta generica (AC-013.9). Nella stessa transazione inserisce `person` e, per l'invito, `account`. L'indice `ux_person_account_single_family` chiude la corsa di ASM-050.
 
@@ -1006,6 +1033,7 @@ Si aggiungono a quelli di ADR-0003:
 - `session`:
   - `menu_app` senza `app.account_id` legge zero sessioni valide;
   - con l'account A non legge né revoca le sessioni di B (AC-047.3);
+  - con l'account A non legge né cancella nemmeno le sessioni **scadute** di B, mentre la pulizia senza contesto le cancella (SEC-SL03a-001);
   - `session_resolve` non restituisce sessioni scadute;
 - `console_recover_admin`:
   - i quattro esiti, ognuno con il suo evento di sicurezza;
@@ -1125,7 +1153,7 @@ Le presenze passate, le visite settimanali e gli eventi restano, legati al tombs
 | `account` | Finché esiste l'account. Account inattivi: 24 mesi + 30 giorni (apertura al pubblico). | App (FR-017), worker dall'apertura al pubblico | SR-017, SR-050 |
 | `session`, `export_file` dell'account (più `password_credential` e `account_token` se FR-002 viene ripreso) | Cascata dall'account | | SR-005 |
 | `session` | Massimo 30 giorni dall'ultimo uso, 90 giorni dalla creazione | Worker (`system_tx`) | SR-037 |
-| `auth_flow` | Massimo 10 minuti (cancellato al callback) | App, worker (`system_tx`) | ADR-0004 |
+| `auth_flow` | Massimo 10 minuti prima del callback. Con un successo la riga si cancella al callback. Con un esito negativo resta al massimo 5 minuti dal consumo e si cancella alla prima lettura dell'esito. In tutto al massimo 15 minuti. | App, worker (`system_tx`, ogni ora) | ADR-0004 rev. 3, SR-049 |
 | `signup_pending` | Massimo 24 ore (l'app usa 30 minuti) | App, worker (`system_tx`) | SR-049 |
 | `invite`, `creation_code`, `family_bootstrap` | 30 giorni dopo scadenza, uso, rifiuto o revoca. L'hash dell'email del bootstrap si cancella al riscatto. | Passaggio notturno per famiglia (`invite`, `family_bootstrap`), worker in `system_tx` (`creation_code`) | SR-019 |
 | `export_file` | 24 ore. I file `family` si cancellano prima se il richiedente perde il ruolo di Amministratore, esce o viene rimosso. | Worker (`system_tx`, policy `p_export_expired`), app (`purge_family_exports`) | SR-016, SR-072 |
@@ -1201,7 +1229,9 @@ Questa scelta va rivista nella DPIA prima dell'apertura al pubblico (SR-065).
 | `account.dish_sort_preference` (M2) | Personale (preferenza d'uso) | sì | Ordinamento dell'archivio | Vita dell'account | no | no |
 | `password_credential.password_hash` (*rinviato, CHG-020*: la riga vale solo se FR-002 viene ripreso) | Segreto | sì | Autenticazione (SR-002) | Vita dell'account | hash Argon2id | sì (mai loggato) |
 | `session.token_hash`, `csrf_token_hash`, `auth_flow.*_hash`, `invite.token_hash`, `creation_code.code_hash`, `signup_pending.handle_hash` | Segreto (hash) | n/a | Verifica monouso | Vedi 9.1 | hash SHA-256 | sì |
-| `auth_flow.code_verifier` | Segreto | n/a | PKCE | ≤ 10 minuti | no (deve essere inviato in chiaro) | sì |
+| `auth_flow.code_verifier` | Segreto | n/a | PKCE | ≤ 15 minuti (10 prima del callback, 5 dopo il consumo) | no (deve essere inviato in chiaro) | sì |
+| `auth_flow.outcome_code` | Interno (codice) | n/a | Messaggio dell'esito del login (ADR-0004 rev. 3) | ≤ 5 minuti dal consumo, cancellato alla lettura | no | no |
+| `auth_flow.outcome_params` | Personale (per `reauth_wrong_account`: email **mascherata** dell'account della sessione) | sì (14-17) | Spiegare all'utente quale account usare | ≤ 5 minuti dal consumo, cancellato alla lettura | no | sì (mai in URL né nei log di accesso, ADR-0004 rev. 3) |
 | `auth_flow.invite_id`, `signup_pending.invite_id`, `auth_flow.return_to` | Interno (ID e percorso, nessun segreto) | n/a | Trasportare l'invito attraverso il login (A-02) e il ritorno (A-03) | ≤ 10 minuti / ≤ 24 ore | no | no |
 | `family_notice.*` | Personale (pseudonimo, tramite `person`). Solo ID e codice, nessun nome (SR-047). | sì | Trasparenza sul recupero dell'Amministratore | 30 giorni | no | no |
 | `family_notice_dismissal.*` | Personale (pseudonimo: chi ha chiuso l'avviso e quando) | sì | Non mostrare di nuovo l'avviso su tutti i dispositivi (UX B-03) | Come l'avviso (30 giorni, cascata) | no | no |
@@ -1241,6 +1271,8 @@ Questa scelta va rivista nella DPIA prima dell'apertura al pubblico (SR-065).
   - quote: lock sulla famiglia più conteggio (SR-060);
   - una sola famiglia per account: indice unico;
   - invito e codice monouso: `UPDATE … WHERE status='pending'/'active' AND expires_at > app.now_utc()`;
+  - flusso OIDC monouso ed esito letto una volta: `UPDATE auth_flow … WHERE consumed_at IS NULL` al callback, `DELETE … RETURNING` alla lettura (sezione 4.1);
+  - bootstrap monouso: `UPDATE family_bootstrap … WHERE redeemed_at IS NULL AND expires_at >= app.now_utc()` (sezione 6.2);
   - massimo 10 voci e 10 fonti: `CHECK` più `UNIQUE` sulla posizione;
   - piatto pianificato non eliminabile: FK `NO ACTION`.
 - **Idempotenza:**
@@ -1256,7 +1288,7 @@ Questa scelta va rivista nella DPIA prima dell'apertura al pubblico (SR-065).
   |---|---|
   | 60 scritture al minuto **per account**, somma di tutte le sessioni | `rate_counter` con chiave HMAC(`write_account`, `account_id`) e finestra di 1 minuto, incrementato da ogni richiesta non sicura autenticata, in aggiunta alla regola per sessione di SR-059 |
   | 5.000 scritture tracciate al giorno **per famiglia** | `rate_counter` con chiave HMAC(`tracked_family`, `family_id`) e finestra di un **giorno locale nel fuso della famiglia** (`window_start = (family_today()::timestamp AT TIME ZONE family.timezone)`), come in ADR-0006, incrementato da ogni rotta con `tracks` (ADR-0012). Al superamento: `429`, evento `rate_limit.exceeded` e allarme (SR-058). Contare le righe di `change_event` per ogni scrittura costerebbe una scansione, quindi non lo si fa. |
-  | Massimo 20 sessioni attive per account | Al login, nella transazione che crea la sessione: `SELECT … FROM account WHERE id=:a FOR UPDATE`, poi cancellazione delle sessioni più vecchie per `last_used_at` oltre la 19ª, con `ix_session_account`, ed evento `session.revoked_limit`. Il lock sull'account serializza i login concorrenti. |
+  | Massimo 20 sessioni attive per account | Al login, nella transazione che crea la sessione: `SELECT … FROM account WHERE id=:a FOR UPDATE`, poi cancellazione delle sessioni più vecchie per `last_used_at` oltre la 19ª, con `ix_session_account_id`, ed evento `session.revoked_limit`. Il lock sull'account serializza i login concorrenti. |
 
   La pulizia dei contatori conserva al massimo 2 giorni di finestre (sezione 3.4).
 - **Cambio di ruolo** (FR-010, FR-066, recupero): lock sulla famiglia, controllo dell'invariante sugli Amministratori, aggiornamento di `person.role`, `change_event` ed evento di sicurezza. Se il ruolo precedente era `admin`, anche `app.purge_family_exports(account_id)` (SR-072).
@@ -1281,7 +1313,7 @@ CREATE FUNCTION app.now_utc() RETURNS timestamptz
 **Dove si usa: ovunque serva "adesso", senza eccezioni nel DDL.**
 - corpi delle funzioni (`family_today`, `ensure_frozen`, risolutori, `maint_*`, `console_*`);
 - default di colonna: **tutte** le colonne `created_at`, `occurred_at`, `executed_at`, `modified_at`, `dismissed_at`, `run_after` e simili hanno `DEFAULT app.now_utc()`, comprese le colonne di sola registrazione;
-- policy (`p_session_expired`, `p_export_expired`);
+- policy (`p_session_expired_select`, `p_session_expired_delete`, `p_export_expired`);
 - viste (`console_stats_global`, "ultimi 30 giorni");
 - SQL scritto nell'applicazione e nel worker (pulizie, prelievo dei job, consumo di inviti e codici, `last_visit_at`).
 
@@ -1347,7 +1379,8 @@ Sono invece `LANGUAGE plpgsql`, quindi sempre contate: `ensure_frozen`, le funzi
   | `0002` | `family`, `family_default_meal`, `person` (senza FK verso `account`), `family_bootstrap`, `course`; RLS e grant; trigger `tg_family_timezone_valid` e `tg_person_admin_invariant`; `app.family_today()` | SL-02 | eseguita |
   | `0003` | `security_event`, `ix_security_event_time`, trigger `tg_security_event_immutable` | SL-02 | eseguita |
   | `0004` | `console_bootstrap_family`, `console_security_events`, `console_audit_note` | SL-02 | eseguita |
-  | `0005` … | Ordine 5 e seguenti del piano: `account` con la FK `person.account_id`, `session`, `auth_flow`, i risolutori (SL-03a), poi `rate_counter`, catalogo, eventi, piano, M1 e M2 | | da scrivere |
+  | `0005` | `account`, FK `fk_person_account_id_account` (RESTRICT), `session` con `ix_session_account_id` e RLS per account (`p_session_self`, `p_session_expired_select`, `p_session_expired_delete`, `p_owner`, `p_backup`), `auth_flow` (`login`, `reauth`, con l'esito del callback), `session_resolve`, `bootstrap_resolve`; grant a `menu_app` (DML) e `menu_backup` (`SELECT`) | SL-03a | eseguita |
+  | `0006` … | Ordine 6 e seguenti del piano: `rate_counter`, catalogo, eventi, piano, M1 e M2 | | da scrivere |
   | *rinviata* | Solo se FR-002 viene ripreso (CHG-020): `password_credential`, `account_token`, `rate_block`, modifiche ad `account` della sezione 4.3 | | dopo M2 |
 
   Il `CONNECTION LIMIT` e la revoca di `CREATE` sugli schemi stanno in `db/bootstrap.sql`, perché riguardano ruoli e schemi creati fuori da Alembic. Il test d'inventario li verifica a ogni esecuzione della CI.

@@ -3,11 +3,23 @@ title = "menu-design"
 [extend]
 useDefault = true
 
-[allowlist]
+[[allowlists]]
 description = "Ambienti virtuali, cache e certificati locali usa e getta"
 paths = [
   '''(^|/)\.venv/''',
   '''(^|/)node_modules/''',
   '''(^|/)\.(mypy|ruff|pytest)_cache/''',
   '''(^|/)db/dev-certs/''',  # certificati e password usa e getta, ignorati da git
+]
+
+[[allowlists]]
+description = "Stringhe sintetiche nei test: JWT alg=none fittizio e token di prova per la ricerca di fughe"
+condition = "AND"
+paths = [
+  '''backend/tests/integration/test_auth_flow\.py$''',
+  '''backend/tests/unit/test_browser_sim\.py$''',
+]
+regexes = [
+  '''eyJhbGciOiJub25lIn0\.eyJzdWIiOiJ4In0\.''',
+  '''q83Zz2uV0xKj9mL4pN7rT1yB6cD5eF8gH3iJ0kA2sW4''',
 ]

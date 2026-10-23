@@ -11,6 +11,9 @@ class EventType(StrEnum):
     CONSOLE_FAMILY_BOOTSTRAP = "console.family_bootstrap"
     CONSOLE_SECURITY_LOG = "console.security_log"
     CONSOLE_AUDIT_NOTE = "console.audit_note"
+    # Accesso (SL-03a, SR-020): scritti da `identity` e `views`, mai con email, `sub` o token.
+    AUTH_LOGIN = "auth.login"
+    AUTH_LOGOUT = "auth.logout"
 
 
 EVENT_TYPES: frozenset[str] = frozenset(e.value for e in EventType)

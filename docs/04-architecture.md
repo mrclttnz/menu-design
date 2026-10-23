@@ -26,6 +26,7 @@
 >   - quattro ruoli di login senza `menu_maint`;
 >   - meno automazioni (niente riconciliazione, rilevazione ridotta, Lighthouse di notte);
 > - **v6 (2026-10-19, G4):** ambiente di staging e repository GitHub privato (ADR-0005 rev. 5), contratto di `/healthz` (Q-T2), `If-Match` malformato (Q-T1, ADR-0008), login con email e password rinviato al backlog dopo M2 (CHG-020: niente provider email, Pwned Passwords e argon2-cffi nell'MVP; testo originale marcato *[rinviato]*), codice `dish_not_planned` in ADR-0010.
+> - **v6.1 (2026-10-23, SL-03a, CR-SL03a-004):** token CSRF di sessione derivato con HMAC dal token di sessione (ADR-0004 rev. 5). Nessun cambio di struttura.
 >
 > Versioni e stato di manutenzione di librerie e servizi sono stati verificati il 2026-10-18 su PyPI, sul registro npm e sui siti dei fornitori.
 
@@ -223,7 +224,7 @@ Un modulo non legge le tabelle di un altro: ne chiama i servizi.
 | `platform.http` | App FastAPI. Middleware propri e testati: header di sicurezza (CSP con Trusted Types, HSTS, `nosniff`, `Referrer-Policy`, `frame-ancestors`), limite del corpo (64 KB, 1 MB per l'import), profondità JSON ≤ 10, `Content-Type: application/json` sulle scritture, `If-Match` solo nella forma `^"(0|[1-9][0-9]{0,17})"$` (altrimenti `422 invalid_value`, assente `428`, ADR-0008, THR-107), ID di correlazione, `Cache-Control: no-store` sulle risposte autenticate. Errori RFC 9457. File statici della SPA. `/healthz` (contratto sotto). IP del client dall'ultima voce di `X-Forwarded-For`. | HTTP | FastAPI 0.146, uvicorn 0.54 |
 | `platform.config` | Configurazione dalle variabili d'ambiente, validata all'avvio. L'avvio fallisce se manca un valore o se un URL del database non ha `sslmode=verify-full`. `APP_ENV` (`dev`, `test`, `staging`, `production`) è obbligatoria: il comando `seed` parte solo con `dev` o `staging` (allow-list). | `Settings` | pydantic-settings 2.16 |
 | `platform.routing` | `AuthzRoute`: ogni rotta dichiara `authz` (ruoli, ambito, ripensamento, riautenticazione, `tracks`). Senza dichiarazione l'app non parte. `x-authz` in OpenAPI. | Decoratore e classe di rotta | FastAPI |
-| `identity` | OIDC Google (avvio con `POST`, callback, esito salvato sul server), sessioni (con `app.session_resolve`, massimo 20 per account), CSRF (per sessione e double submit anonimo), bootstrap per `email_sha256`, SR-049, riautenticazione con lo stesso `sub`. `account.email_sha256`. *[rinviato, CHG-020: backlog dopo M2]* ~~Da M2~~: password, verifica email, recupero. | `/api/v1/auth/*`, `/api/v1/session` (con `notices[]` e `authOutcome`) | Authlib 1.9, joserfc 1.7, httpx 0.28 (ADR-0004). argon2-cffi solo se la password viene ripresa |
+| `identity` | OIDC Google (avvio con `POST`, callback, esito salvato sul server), sessioni (con `app.session_resolve`, massimo 20 per account), CSRF (per sessione, derivato con HMAC-SHA256 dal token di sessione e salvato solo come hash, ADR-0004 rev. 5; double submit per le richieste anonime), bootstrap per `email_sha256`, SR-049, riautenticazione con lo stesso `sub`. `account.email_sha256`. *[rinviato, CHG-020: backlog dopo M2]* ~~Da M2~~: password, verifica email, recupero. | `/api/v1/auth/*`, `/api/v1/session` (con `notices[]` e `authOutcome`) | Authlib 1.9, joserfc 1.7, httpx 0.28 (ADR-0004). argon2-cffi solo se la password viene ripresa |
 | `access` | Matrice ruoli × operazioni centralizzata, regole "Propri" e "Se presente", periodo di ripensamento, `403` o `404`, eventi per gli accessi negati. | `authorize(ctx, operation, resource)` | Python |
 | `tenancy` | `family_tx(ctx)` con `set_config(…, true)` e repository filtrati. `system_tx()` per le tabelle non di famiglia. Unico punto che crea sessioni SQLAlchemy. | Context manager | SQLAlchemy 2.1, psycopg 3.3 |
 | `family` | Famiglia, fuso, pasti di default, eliminazione con ripensamento, persone, ruoli, invariante "almeno un Amministratore", profili con dichiarazione di responsabilità genitoriale, inviti (email di chi entra visibile agli Amministratori, SR-073), codici, età, informativa. **Avvisi alla famiglia** (`family_notice`): lettura in `GET /session`, chiusura per account. | `/api/v1/family*`, `/invites*`, `/people*`, `POST /api/v1/notices/{id}/dismiss` | Python |
@@ -313,7 +314,7 @@ sequenceDiagram
   G-->>W: token ID
   W->>W: firma RS256 (JWKS), iss, aud, exp, nonce, state, email_verified=true (joserfc)
   alt account (google, sub) esistente
-    W->>D: INSERT session (hash del token, auth_time, hash del CSRF), al massimo 20 per account
+    W->>D: INSERT session (hash del token, auth_time, hash del CSRF derivato dal token), al massimo 20 per account
   else bootstrap valido (bootstrap_resolve per email_sha256, meno di 7 giorni)
     W->>D: transazione: account con email_sha256, membership Amministratore, consumo del bootstrap, evento di sicurezza
   else flusso di invito in corso (M1)

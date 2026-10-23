@@ -1,12 +1,16 @@
 import { useLingui } from "@lingui/react";
 import { useEffect, useRef, type ReactElement } from "react";
 import { Outlet, useLocation } from "react-router";
+import { ErrorState } from "../components/ErrorState";
+import { Skeleton } from "../components/Skeleton";
+import { useSession } from "../session";
 
 export const MAIN_ID = "contenuto";
 
 export function RootLayout(): ReactElement {
   const { _ } = useLingui();
   const { pathname } = useLocation();
+  const { loading, failed, error, reload } = useSession();
   const previous = useRef(pathname);
 
   // WCAG 2.4.3: dopo un cambio di rotta il focus va sul titolo della nuova vista.
@@ -22,7 +26,13 @@ export function RootLayout(): ReactElement {
         {_("nav.skipToContent")}
       </a>
       <main id={MAIN_ID} tabIndex={-1}>
-        <Outlet />
+        {loading ? (
+          <Skeleton />
+        ) : failed ? (
+          <ErrorState error={error} onRetry={() => void reload()} />
+        ) : (
+          <Outlet />
+        )}
       </main>
     </>
   );

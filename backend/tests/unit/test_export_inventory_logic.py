@@ -50,6 +50,27 @@ def test_inventory_flags_a_contributor_claiming_a_non_family_table() -> None:
     ]
 
 
+def test_inventory_accepts_the_self_scope_tables_of_identity_once() -> None:
+    """SL-03a: `account` e `session` non sono di famiglia ma entrano nel perimetro `self`."""
+    declared = {"family.F": TABLES, "identity.I": {"account", "session"}}
+    assert export_inventory_problems(declared, TABLES, {}) == []
+    twice = {**declared, "other.O": {"account"}}
+    assert export_inventory_problems(twice, TABLES, {}) == [
+        "account: dichiarata da più contributori ['identity.I', 'other.O']"
+    ]
+    assert export_inventory_problems(declared, TABLES, {}, non_family_exported=()) == [
+        "account: dichiarata da ['identity.I'] ma non è di famiglia",
+        "session: dichiarata da ['identity.I'] ma non è di famiglia",
+    ]
+
+
+def test_inventory_still_rejects_other_non_family_tables_next_to_identity() -> None:
+    declared = {"family.F": TABLES, "identity.I": {"account", "session", "auth_flow"}}
+    assert export_inventory_problems(declared, TABLES, {}) == [
+        "auth_flow: dichiarata da ['identity.I'] ma non è di famiglia"
+    ]
+
+
 def test_inventory_requires_a_reason_for_every_exclusion_and_rejects_exported_exclusions() -> None:
     declared = {"a.A": TABLES}
     assert export_inventory_problems(declared, TABLES, {"person": "motivo"}) == [

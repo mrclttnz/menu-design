@@ -111,6 +111,27 @@ jobs:
   e2e:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    env:
+      # Lo stack degli e2e (backend/tests/support/e2e_stack.py) crea un database sul cluster di
+      # test effimero della VM, come il job `backend`.
+      MENU_TEST_PG_ADMIN_PASSWORD: ci-throwaway-pg-admin
+      MENU_TEST_PG_HOST: localhost
+      MENU_TEST_PG_PORT: "5432"
+      MENU_TEST_PG_CA: ${{ github.workspace }}/db/dev-certs/ca.crt
+    services:
+      postgres:
+        image: postgres:17@sha256:a63c1ea3f6a3a5a1621f97d2aba3b30faecfab4224c1b0000cc85ced57bb1939
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-throwaway-pg-admin
+        ports:
+          - 127.0.0.1:5432:5432
+        options: >-
+          --name menu-pg
+          --health-cmd "pg_isready -h 127.0.0.1 -U postgres"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -128,6 +149,8 @@ jobs:
         run: corepack enable
       - name: Backend dependencies (the server that serves the SPA)
         run: make sync
+      - name: TLS for the PostgreSQL service (the app enforces verify-full)
+        run: ./scripts/ci-pg-tls.sh menu-pg
       - name: Web dependencies
         run: make web-install
       - name: Install Chromium (explicit download, with system libraries)

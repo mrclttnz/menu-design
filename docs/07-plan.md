@@ -375,7 +375,7 @@ Notazione sintetica in stile TypeScript. `?` = facoltativo.
 
 ```ts
 Problem        = { type, title, status, code: ErrorCode, params?: object, errors?: {field, code, params?}[] }
-SessionView    = { authenticated: false, notices: [] }
+SessionView    = { authenticated: false, notices: [], authOutcome?: {code, params?} }   // authOutcome una sola volta anche da anonimo: un accesso non riuscito lascia anonimi (ADR-0004 rev. 3)
                | { authenticated: true, csrfToken: string, account: {id, displayName},
                    family: {id, name, timezone, today: Date, status, deletionDueAt?} | null,
                    person: {id, role} | null, privacyReviewRequired: boolean,          // SL-16
@@ -424,7 +424,7 @@ Legenda dei permessi: **A** Amministratore, **P** Pianificatore, **M** Membro; *
 | Metodo | Percorso | Slice | Permessi | Richiesta | Risposta | Errori specifici |
 |---|---|---|---|---|---|---|
 | GET | `/healthz` (fuori da `/api/v1`), `operationId platform.health.read` | SL-00a (controllo DB da SL-00b) | public (`x-authz` `scope: public`) | – | `200 {"status":"ok"}`, `Cache-Control: no-store`; esito del `SELECT 1` tenuto in memoria per circa 5 s, con il pool esistente (A-24, THR-106) | `503 {"status":"unavailable"}`, `no-store` |
-| GET | `/api/v1/session` | SL-03a | public | cookie | `200 SessionView`; imposta `__Host-csrf` se assente; consuma `authOutcome` | – |
+| GET | `/api/v1/session` | SL-03a | public | cookie | `200 SessionView` (`authOutcome` anche nella forma anonima); imposta `__Host-csrf` se assente; consuma `authOutcome` | – |
 | POST | `/api/v1/auth/google/start` | SL-03a (limite in SL-03b, `reauth` da SL-28) | anonymous (`login`), account (`reauth`) | `{purpose: "login"|"reauth", returnTo?}` | `200 {redirectUrl}` + `__Host-auth_flow` | `429` (30/IP/15 min, SL-03b), `401` per `reauth` senza sessione |
 | GET | `/api/v1/auth/google/callback` | SL-03a | public | `code`, `state`, cookie `__Host-auth_flow` | sempre `302` verso `returnTo` (allow-list) o `/piano`; esito in `auth_flow` | nessuno nell'URL; esiti `auth_cancelled`, `auth_failed`, `not_member`, `invite_invalid`, `already_in_family`, `reauth_wrong_account` via `authOutcome` |
 | POST | `/api/v1/auth/logout` | SL-03a | account | `{}` | `204`, cookie cancellato | EC |

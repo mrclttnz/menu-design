@@ -13,6 +13,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 from support import pg
+from support.accounts import AlfaWorld, make_alfa
+from support.browser_sim import Browser
+from support.fake_oidc import CLIENT_ID, CLIENT_SECRET, REDIRECT_URI, FakeOidc
+from support.fake_oidc_server import StubServer
 from support.inventory import FamilyTableSpec
 from support.owner import Owner
 from support.paths import REPO
@@ -39,6 +43,11 @@ def app_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("APP_ENV", "test")
     monkeypatch.setenv("TRUSTED_PROXY_HOPS", "0")
     monkeypatch.setenv("DATABASE_URL_APP", DUMMY_DATABASE_URL)
+    # SL-03a: configurazione di Google (segnaposto sintetici). L'emittente resta quello di
+    # default (Google): all'avvio l'app non fa alcuna richiesta di rete, la discovery è pigra.
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", CLIENT_ID)
+    monkeypatch.setenv("GOOGLE_CLIENT_SECRET", CLIENT_SECRET)
+    monkeypatch.setenv("APP_BASE_URL", BASE_URL)
 
 
 @pytest.fixture
@@ -269,3 +278,53 @@ def catalog(worker_db: str) -> Iterator[psycopg.Connection]:
     """Connessione di sola lettura del catalogo (superutente del cluster di test)."""
     with pg.admin_connect(worker_db) as conn:
         yield conn
+
+
+# --- accesso con Google (SL-03a): provider OIDC finto su HTTP locale, app su database reale ------
+
+
+@pytest.fixture(scope="session")
+def oidc_server() -> Iterator[StubServer]:
+    """Un server OIDC finto per worker (127.0.0.1, porta libera); stato nuovo per test."""
+    server = StubServer()
+    server.start()
+    try:
+        yield server
+    finally:
+        server.stop()
+
+
+@pytest.fixture
+def oidc(oidc_server: StubServer) -> FakeOidc:
+    return oidc_server.fresh(redirect_uri=REDIRECT_URI)
+
+
+@pytest.fixture
+def auth_env(db_env: None, oidc: FakeOidc, monkeypatch: pytest.MonkeyPatch) -> None:
+    """App con database di test e `OIDC_ISSUER` = il provider finto (solo con `APP_ENV=test`)."""
+    monkeypatch.setenv("OIDC_ISSUER", oidc.issuer)
+
+
+@pytest.fixture
+def auth_client(auth_env: None) -> Iterator[TestClient]:
+    from menu.app import create_app
+
+    with TestClient(create_app(), base_url=BASE_URL, raise_server_exceptions=False) as client:
+        yield client
+
+
+@pytest.fixture
+def browser(auth_client: TestClient) -> Browser:
+    return Browser(auth_client)
+
+
+@pytest.fixture
+def other_browser(auth_client: TestClient) -> Browser:
+    """Un secondo browser sullo stesso server (la vittima e l'aggressore, un altro dispositivo)."""
+    return Browser(auth_client)
+
+
+@pytest.fixture
+def alfa(owner: Owner) -> AlfaWorld:
+    """Famiglia Alfa (Amministratore e Membro con account) e un'identità senza famiglia."""
+    return make_alfa(owner)

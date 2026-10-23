@@ -8,6 +8,8 @@ import pytest
 
 from support import pg
 from support.inventory import (
+    EXPECTED_CONSOLE_SECDEF,
+    EXPECTED_IDENTITY_SECDEF,
     EXPECTED_SECDEF_NOW,
     SQL_FUNCTIONS_NOW,
     bare_time_problems,
@@ -79,10 +81,14 @@ def test_migrations_never_use_bare_time_functions_except_the_now_utc_body() -> N
 
 
 def _all_inventories(conn: psycopg.Connection, *, state: str) -> None:
-    """`state`: "head" (0004), "previous" (0003, dopo `downgrade -1`), "base" (nessuna)."""
+    """`state`: "head" (0005), "previous" (0004, dopo `downgrade -1`), "base" (nessuna)."""
     assert bare_time_problems(conn) == []
     assert rls_problems(conn) == []
-    expected_secdef = EXPECTED_SECDEF_NOW if state == "head" else frozenset()
+    expected_secdef = {
+        "head": EXPECTED_SECDEF_NOW,
+        "previous": EXPECTED_CONSOLE_SECDEF,
+        "base": frozenset(),
+    }[state]
     assert secdef_problems(conn, expected_secdef) == []
     names = {
         r[0]
@@ -93,10 +99,23 @@ def _all_inventories(conn: psycopg.Connection, *, state: str) -> None:
     if state == "head":
         assert names >= SQL_FUNCTIONS_NOW | EXPECTED_SECDEF_NOW
     elif state == "previous":
-        # 0003: le funzioni di 0001/0002 restano, le `console_*` di 0004 sono sparite.
-        assert names >= SQL_FUNCTIONS_NOW, names
-        left = names & EXPECTED_SECDEF_NOW
+        # 0004: le funzioni di 0001-0004 restano, i risolutori di 0005 sono spariti (SL-03a).
+        assert names >= SQL_FUNCTIONS_NOW | EXPECTED_CONSOLE_SECDEF, names
+        left = names & EXPECTED_IDENTITY_SECDEF
         assert not left, f"il downgrade ha lasciato {left}"
+        tables = {
+            r[0]
+            for r in conn.execute(
+                "select relname from pg_class where relnamespace = 'app'::regnamespace "
+                "and relkind = 'r'"
+            ).fetchall()
+        }
+        assert not tables & {"account", "session", "auth_flow"}, tables
+        fk = conn.execute(
+            "select count(*) from pg_constraint where conrelid = 'app.person'::regclass "
+            "and contype = 'f' and confrelid::regclass::text like '%account'"
+        ).fetchone()
+        assert fk == (0,), "il downgrade ha lasciato la FK person.account_id"
     else:
         assert names == set(), f"il downgrade ha lasciato funzioni: {names}"
 
