@@ -10,6 +10,7 @@ from pathlib import Path
 
 os.environ["APP_ENV"] = "test"
 os.environ["TRUSTED_PROXY_HOPS"] = "0"
+os.environ["SESSION_PEPPER"] = "schema-only-pepper-never-used-0123456789abcdef"
 os.environ.setdefault(
     "DATABASE_URL_APP",
     "postgresql+psycopg://menu_app:schema-only@localhost:1/menu"

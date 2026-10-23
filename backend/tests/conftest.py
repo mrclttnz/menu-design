@@ -20,6 +20,7 @@ from support.fake_oidc_server import StubServer
 from support.inventory import FamilyTableSpec
 from support.owner import Owner
 from support.paths import REPO
+from support.ratelimit import PEPPER_A as PEPPER
 
 BASE_URL = "https://testserver"
 # Database per i test senza cluster: pool pigro, mai connesso (porta 1 chiusa).
@@ -42,6 +43,7 @@ def app_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("APP_ENV", "test")
     monkeypatch.setenv("TRUSTED_PROXY_HOPS", "0")
+    monkeypatch.setenv("SESSION_PEPPER", PEPPER)  # SL-03b: pepper delle chiavi HMAC dei limiti
     monkeypatch.setenv("DATABASE_URL_APP", DUMMY_DATABASE_URL)
     # SL-03a: configurazione di Google (segnaposto sintetici). L'emittente resta quello di
     # default (Google): all'avvio l'app non fa alcuna richiesta di rete, la discovery è pigra.
@@ -83,6 +85,7 @@ def generated_schema(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> dict[st
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("APP_ENV", "test")
     monkeypatch.setenv("TRUSTED_PROXY_HOPS", "0")
+    monkeypatch.setenv("SESSION_PEPPER", PEPPER)
     monkeypatch.setenv("DATABASE_URL_APP", DUMMY_DATABASE_URL)
     schema: dict[str, Any] = create_app().openapi()
     return schema
@@ -328,3 +331,48 @@ def other_browser(auth_client: TestClient) -> Browser:
 def alfa(owner: Owner) -> AlfaWorld:
     """Famiglia Alfa (Amministratore e Membro con account) e un'identità senza famiglia."""
     return make_alfa(owner)
+
+
+# --- limiti di frequenza e sessioni (SL-03b): più avvii dell'app sullo stesso database ---------
+
+
+@pytest.fixture
+def rl_calls() -> list[str]:
+    """Registro delle esecuzioni degli handler di prova autenticati (rotte sotto `/api/v1/_rl`)."""
+    return []
+
+
+@pytest.fixture
+def app_factory(
+    auth_env: None, monkeypatch: pytest.MonkeyPatch, rl_calls: list[str]
+) -> Iterator[Any]:
+    """Avvia l'app reale (+ rotte di prova autenticate) con `hops` e `pepper` a scelta.
+
+    L'engine di `tenancy` è globale al processo: si tiene UN'app alla volta, e il nuovo avvio
+    chiude il precedente. Così un secondo avvio simula un riavvio del servizio sullo stesso
+    database (nessuno stato in memoria sopravvive).
+    """
+    from menu.app import create_app
+    from support.ratelimit import build_authenticated_probe
+
+    opened: list[TestClient] = []
+
+    def start(*, hops: str = "0", pepper: str = PEPPER) -> TestClient:
+        while opened:
+            opened.pop().__exit__(None, None, None)
+        monkeypatch.setenv("TRUSTED_PROXY_HOPS", hops)
+        monkeypatch.setenv("SESSION_PEPPER", pepper)
+        client = TestClient(
+            create_app(extra_routers=[build_authenticated_probe(rl_calls)]),
+            base_url=BASE_URL,
+            raise_server_exceptions=False,
+        )
+        client.__enter__()
+        opened.append(client)
+        return client
+
+    try:
+        yield start
+    finally:
+        while opened:
+            opened.pop().__exit__(None, None, None)

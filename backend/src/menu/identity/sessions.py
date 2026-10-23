@@ -6,6 +6,7 @@ RLS per account. Validità: 30 giorni dall'ultimo uso e 90 dalla creazione, entr
 `last_used_at` si rinnova al massimo una volta all'ora.
 """
 
+from dataclasses import dataclass
 from uuid import UUID
 
 from sqlalchemy import text
@@ -18,6 +19,7 @@ from menu.identity.tokens import csrf_token_for, digest, new_secret, well_formed
 from menu.tenancy import Tx, system_tx
 
 SESSION_COOKIE = "__Host-session"
+MAX_SESSIONS = 20  # per account (SR-070, THR-013)
 IDLE_SECONDS = 30 * 24 * 3600
 
 _RESOLVE = text("select * from app.session_resolve(:token_hash)")
@@ -34,6 +36,17 @@ _INSERT = text(
     "cast(:device_label as varchar), cast(:ip_prefix as inet)) returning id"
 )
 _DELETE = text("delete from app.session where id = :session_id")
+_LOCK_ACCOUNT = text("select pg_advisory_xact_lock(hashtextextended(cast(:account_id as text), 0))")
+# Sessioni valide come in `session_resolve` (720 ore dall'ultimo uso, 2160 dalla creazione): le
+# scadute non contano e le toglie la pulizia giornaliera. Si tengono le `:keep` più recenti.
+_EVICT = text(
+    "with live as (select id, row_number() over (order by last_used_at desc, created_at desc, id) "
+    "as position from app.session where account_id = :account_id "
+    "and last_used_at >= app.now_utc() - interval '720 hours' "
+    "and created_at >= app.now_utc() - interval '2160 hours') "
+    "delete from app.session s using live where s.id = live.id and live.position > :keep "
+    "returning s.id"
+)
 
 
 def resolve_session(token: str | None) -> SessionInfo | None:
@@ -62,6 +75,34 @@ def resolve_session(token: str | None) -> SessionInfo | None:
         csrf_token_hash=bytes(row["csrf_token_hash"]),
         renewed_max_age=max_age,
     )
+
+
+@dataclass(frozen=True)
+class SessionRef:
+    session_id: UUID
+    account_id: UUID
+
+
+def identify_session(token: str | None) -> SessionRef | None:
+    """Sessione valida del cookie in sola lettura: non rinnova la finestra mobile (limiti)."""
+    if not well_formed(token) or token is None:
+        return None
+    with system_tx() as tx:
+        row = tx.execute(_RESOLVE, {"token_hash": digest(token)}).mappings().first()
+    if row is None:
+        return None
+    return SessionRef(row["session_id"], row["account_id"])
+
+
+def evict_over_cap(tx: Tx, account_id: UUID) -> list[UUID]:
+    """Fa posto per una sessione nuova: revoca le meno usate oltre le `MAX_SESSIONS - 1` (SR-070).
+
+    Il blocco per account serializza i login concorrenti dello stesso account: il secondo vede
+    le sessioni già inserite dal primo. Contesto di account già impostato su `tx`.
+    """
+    tx.execute(_LOCK_ACCOUNT, {"account_id": str(account_id)})
+    rows = tx.execute(_EVICT, {"account_id": account_id, "keep": MAX_SESSIONS - 1})
+    return [row[0] for row in rows]
 
 
 def create_session(

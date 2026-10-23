@@ -32,6 +32,7 @@ from support.accounts import make_bootstrap, make_family, make_member  # noqa: E
 from support.fake_oidc import CLIENT_ID, CLIENT_SECRET  # noqa: E402
 from support.fake_oidc_server import StubServer  # noqa: E402
 from support.owner import Owner  # noqa: E402
+from support.ratelimit import PEPPER_A  # noqa: E402
 
 REPO = TESTS.parents[1]
 
@@ -110,7 +111,8 @@ def main() -> int:
         "PATH": os.environ.get("PATH", ""),
         "HOME": os.environ.get("HOME", ""),
         "APP_ENV": "test",
-        "TRUSTED_PROXY_HOPS": "0",
+        "TRUSTED_PROXY_HOPS": "1",  # SL-03b: un IP per contesto, vedi web/tests/e2e/support/stub.ts
+        "SESSION_PEPPER": PEPPER_A,
         "DATABASE_URL_APP": pg.cluster().role_url("menu_app", dbname, sqlalchemy=True),
         "WEB_DIST_DIR": args.dist,
         "GOOGLE_CLIENT_ID": CLIENT_ID,

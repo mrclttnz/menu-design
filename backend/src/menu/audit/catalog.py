@@ -14,6 +14,9 @@ class EventType(StrEnum):
     # Accesso (SL-03a, SR-020): scritti da `identity` e `views`, mai con email, `sub` o token.
     AUTH_LOGIN = "auth.login"
     AUTH_LOGOUT = "auth.logout"
+    # Limiti e sessioni (SL-03b, SR-058, SR-070): `rate_limit.exceeded` ha solo la regola.
+    RATE_LIMIT_EXCEEDED = "rate_limit.exceeded"
+    SESSION_EVICTED = "session.evicted"
 
 
 EVENT_TYPES: frozenset[str] = frozenset(e.value for e in EventType)

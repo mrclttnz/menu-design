@@ -1,6 +1,6 @@
 import { useLingui } from "@lingui/react";
 import { useEffect, useRef, type ReactElement } from "react";
-import { Outlet, useLocation } from "react-router";
+import { NavLink, Outlet, useLocation } from "react-router";
 import { ErrorState } from "../components/ErrorState";
 import { Skeleton } from "../components/Skeleton";
 import { useSession } from "../session";
@@ -10,7 +10,7 @@ export const MAIN_ID = "contenuto";
 export function RootLayout(): ReactElement {
   const { _ } = useLingui();
   const { pathname } = useLocation();
-  const { loading, failed, error, reload } = useSession();
+  const { session, loading, failed, error, reload } = useSession();
   const previous = useRef(pathname);
 
   // WCAG 2.4.3: dopo un cambio di rotta il focus va sul titolo della nuova vista.
@@ -34,6 +34,12 @@ export function RootLayout(): ReactElement {
           <Outlet />
         )}
       </main>
+      {session?.authenticated ? (
+        <nav className="bottom-nav" aria-label={_("nav.label")}>
+          <NavLink to="/piano">{_("nav.plan")}</NavLink>
+          <NavLink to="/altro">{_("nav.more")}</NavLink>
+        </nav>
+      ) : null}
     </>
   );
 }

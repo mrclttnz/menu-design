@@ -13,6 +13,7 @@ import urllib.request
 import pytest
 
 from support.paths import BACKEND, SRC
+from support.ratelimit import PEPPER_A
 
 pytestmark = pytest.mark.integration
 
@@ -32,6 +33,7 @@ def test_server_logs_requests_without_query_strings(app_url: str) -> None:
         "HOME": os.environ.get("HOME", ""),
         "APP_ENV": "test",
         "TRUSTED_PROXY_HOPS": "0",
+        "SESSION_PEPPER": PEPPER_A,
         "DATABASE_URL_APP": app_url,
         "PYTHONPATH": str(SRC.parent),
     }

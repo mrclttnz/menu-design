@@ -17,6 +17,7 @@ AppEnv = Literal["dev", "test", "staging", "production"]
 _DB_SCHEMES = frozenset({"postgresql", "postgresql+psycopg"})
 GOOGLE_ISSUER = "https://accounts.google.com"
 _STRICT_ENVS = frozenset({"staging", "production"})
+MIN_PEPPER_LENGTH = 32
 
 
 def check_database_url(value: str) -> None:
@@ -65,7 +66,10 @@ class Settings(BaseSettings):
     )
 
     app_env: AppEnv
-    trusted_proxy_hops: int = Field(default=0, ge=0, le=10)
+    # Nessun valore predefinito (SEC-SL00a-005): 0 darebbe limiti per IP globali dietro un proxy.
+    trusted_proxy_hops: int = Field(ge=0, le=10)
+    # Pepper delle chiavi HMAC dei contatori (ADR-0006): segreto per ambiente, mai nei log.
+    session_pepper: SecretStr
     database_url_app: SecretStr
     web_dist_dir: Path | None = None
     # Accesso con Google (SL-03a, ASM-073). L'emittente è Google in `staging` e `production`;
@@ -79,6 +83,14 @@ class Settings(BaseSettings):
     @classmethod
     def _verify_full_only(cls, value: SecretStr) -> SecretStr:
         check_database_url(value.get_secret_value())
+        return value
+
+    @field_validator("session_pepper")
+    @classmethod
+    def _strong_pepper(cls, value: SecretStr) -> SecretStr:
+        secret = value.get_secret_value()
+        if len(secret) < MIN_PEPPER_LENGTH or "CHANGE_ME" in secret.upper():
+            raise ValueError(f"SESSION_PEPPER richiede almeno {MIN_PEPPER_LENGTH} caratteri reali")
         return value
 
     @field_validator("web_dist_dir", mode="before")
@@ -106,6 +118,8 @@ class Settings(BaseSettings):
             problems.append("GOOGLE_CLIENT_ID è obbligatorio")
         if strict and self.google_client_secret is None:
             problems.append("GOOGLE_CLIENT_SECRET è obbligatorio")
+        if strict and self.trusted_proxy_hops < 1:
+            problems.append(f"TRUSTED_PROXY_HOPS deve essere almeno 1 in {self.app_env}")
         issuer_problem = _issuer_problem(self.app_env, self.oidc_issuer)
         if issuer_problem:
             problems.append(issuer_problem)

@@ -31,6 +31,7 @@ def test_startup_accepts_each_allowed_app_env(
     app_env: None, monkeypatch: pytest.MonkeyPatch, value: str
 ) -> None:
     monkeypatch.setenv("APP_ENV", value)
+    monkeypatch.setenv("TRUSTED_PROXY_HOPS", "1")  # SEC-SL03b-003: >= 1 in staging e production
     with TestClient(create_app()) as client:
         assert client.get("/healthz").status_code == 503  # DB di prova irraggiungibile (SL-00b)
 
@@ -41,6 +42,7 @@ def test_debug_is_off_in_every_environment(
 ) -> None:
     """APP_ENV non disattiva né attiva controlli: il debug resta spento (piano §5.2, A-25)."""
     monkeypatch.setenv("APP_ENV", value)
+    monkeypatch.setenv("TRUSTED_PROXY_HOPS", "1")  # SEC-SL03b-003: >= 1 in staging e production
     assert create_app().debug is False
 
 

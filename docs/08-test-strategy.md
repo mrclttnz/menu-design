@@ -241,15 +241,15 @@ Per ogni operazione con unità versionata (OpenAPI: parametro `If-Match`):
 - operazioni su più unità (`move`, `swap`, `copy`): `expectedVersions` superate → `412` con `params.units[]`, **tutto o niente**; ordine dei lock senza deadlock con operazioni incrociate (SL-20).
 
 ### 7.4 Limiti di frequenza (SR-059, SR-070, SR-003)
-Un test per **ogni riga** della tabella di SR-059 e per ogni limite di SR-070 (SR-059, SR-070 e AC-001.9 → SL-03b (con la schermata S-08); le righe di registrazione, recupero e reinvio dell'email e password sono post-M2 e non si testano finché la funzione è in backlog). Per non inviare centinaia di richieste, l'helper `owner` porta il contatore a `limite − 1` (`seed_counter`), poi una richiesta passa e la successiva dà `429` con `Retry-After`; per i limiti piccoli (5, 10) si inviano le richieste vere.
+Un test per **ogni riga attiva** della tabella di SR-059 e per ogni limite di SR-070 (SR-059, SR-070 e AC-001.9 → SL-03b (con la schermata S-08); le righe di registrazione, recupero e reinvio dell'email e password sono post-M2 e non si testano finché la funzione è in backlog). **Righe rinviate** (CHG-021, ADR-0006 rev. 6, D2), senza test finché restano tali: "Callback OIDC 30 per IP in 15 minuti" e "Login fallito 20 per IP in 15 minuti" (il callback risponde sempre `302`; da rivedere con SL-12 o con SL-33/SL-34). Finestra fissa allineata all'orologio del database (D1): `Retry-After` è esatto e i test lo confrontano con la fine della finestra. Per non inviare centinaia di richieste, l'helper `owner` porta il contatore a `limite − 1` (`seed_counter`), poi una richiesta passa e la successiva dà `429` con `Retry-After`; per i limiti piccoli (5, 10) si inviano le richieste vere.
 
 | Limite | Verifica |
 |---|---|
-| Avvio login / callback 30 per IP / 15 min | la 31ª → `429`; IP dall'ultima voce di `X-Forwarded-For` (con `TRUSTED_PROXY_HOPS`); header falsificato non cambia IP (THR-012); salto di finestra con `age_counter` |
+| Avvio login 30 per IP / 15 min (callback rinviato, CHG-021) | la 31ª → `429`; IP dall'ultima voce di `X-Forwarded-For` (con `TRUSTED_PROXY_HOPS`); header falsificato non cambia IP (THR-012); IPv6 dello stesso /64 e IPv4-mapped condividono il contatore; salto di finestra con `age_counter` |
 | Link o codici non validi 10 per IP / 15 min; codici errati 5 per account (M2) | `429`; il link valido non conta |
-| Login fallito, registrazione, recupero, reinvio, import, esportazioni (M1/M2) | un test per riga; esportazioni: 3 per account e 3 per famiglia al giorno |
-| API autenticata 300/min per sessione, di cui 60 scritture | le richieste oltre → `429`; una seconda sessione ha contatori propri |
-| 60 scritture/min **per account**, sommando le sessioni (SR-070) | due sessioni dello stesso account sommano |
+| Import, esportazioni (M1/M2); login fallito, registrazione, recupero, reinvio (rinviati) | un test per riga attiva; esportazioni: 3 per account e 3 per famiglia al giorno |
+| API autenticata 300/min per sessione, di cui 60 scritture | le richieste oltre → `429`; una seconda sessione ha contatori propri; le richieste respinte contano; `rate_limit.exceeded` una sola volta per regola e finestra; logout possibile a scritture esaurite |
+| 60 scritture/min **per account**, sommando le sessioni (SR-070, SL-03b) | due sessioni dello stesso account sommano |
 | 5.000 scritture tracciate/giorno per famiglia, giorno locale nel fuso della famiglia | contatore a 4.999; la 5.000ª riesce, la successiva `429` + evento `rate_limit.exceeded`; il giorno seguente (`age_counter`) riparte; due fusi diversi cambiano la finestra |
 | Massimo 20 sessioni per account | il 21º login revoca la meno recente |
 | Contatori persistenti | riavvio simulato (nuova app sullo stesso database): i contatori restano; due istanze condividono lo stesso upsert |
@@ -446,7 +446,7 @@ Legenda dei tipi: **U** unit; **DB** test di database; **I** integrazione API; *
 | SR-056 | Presa visione dell'informativa e nuova conferma | I, E2E | `privacyReviewRequired` blocca i dati fino alla conferma; versione e data registrate |
 | SR-057 | Registro in sola aggiunta | DB | `UPDATE/DELETE/SELECT` negati a `menu_app`, trigger di immutabilità |
 | SR-058 | Allarmi entro 15 minuti | U, PROC | Ogni soglia produce il log strutturato atteso (simulazione); metrica e notifica: prova su staging (devops, `docs/09-release.md`) |
-| SR-059 | Valori dei limiti (SL-03b, e le slice che aggiungono le righe) | SEC | Sezione 7.4, un test per riga e per il riavvio |
+| SR-059 | Valori dei limiti (SL-03b, e le slice che aggiungono le righe) | SEC | Sezione 7.4, un test per riga attiva e per il riavvio; righe "Callback OIDC" e "Login fallito per IP" rinviate (CHG-021) |
 | SR-060 | Limiti di richiesta e quote | SEC, CONC | Sezioni 7.6 e 9 |
 | SR-061 (post-M2) | Email e dominio | I, PROC | Mittente finto; SPF/DKIM/DMARC: verifica DNS di rilascio (P-14) |
 | SR-062 | Budget e degrado | CFG, PROC | `max-instances` e timeout nel file di deploy; budget: P-2 |
@@ -457,7 +457,7 @@ Legenda dei tipi: **U** unit; **DB** test di database; **I** integrazione API; *
 | SR-067 | Esportazione da console | I, U | Perimetro del richiedente, output con ID e stato, payload con `family_id` estraneo ignorato |
 | SR-068 | Riautenticazione sulla stessa identità | SEC | THR-008 |
 | SR-069 | Respinta (CHG-009) | n/a | Nessun test |
-| SR-070 | Limiti per account e famiglia, 20 sessioni (SL-03b) | SEC, I | Sezione 7.4 |
+| SR-070 | 20 sessioni e 60 scritture/min per account (SL-03b), 5.000 tracciate/giorno per famiglia (SL-05) | SEC, I | Sezione 7.4 |
 | SR-071 | Scadenza della cache offline a 7 giorni | E2E | `page.clock` avanti di 8 giorni: dati non mostrati e cancellati |
 | SR-072 | Perimetro e ciclo di vita delle esportazioni | I, SEC | Download `family` solo se ancora Amministratore; declassamento o uscita cancella i file; nessuna email, ultima visita o sessione di altri nei file |
 | SR-073 | Email visibile solo agli Amministratori | SEC | Scansione ricorsiva delle risposte per Pianificatore e Membro (chiavi e valori): nessuna email; solo per persone entrate con invito |
@@ -637,7 +637,7 @@ Regola: finché uno strumento manca, il report della slice indica **cosa non è 
 | I-T2 | `docs/07-plan.md` §6, riga `nightly` | Lighthouse parte da SL-06a, ADR-0001 dice "dalla prima slice con UI" (SL-01/SL-03). | Accettabile: S-01 e S-08 non sono viste principali. Segnare nel piano che SL-01 ha solo il budget del bundle. | tech-lead | – |
 | I-T3 | `docs/07-plan.md` §6 / §5.5 e `docs/06-threat-model.md` §11 | Il piano indica ZAP baseline "prima del rilascio M1" e `dast` come passo di rilascio; il threat model lo chiede anche "nell'audit (G6)". ZAP richiede Docker e uno staging. | Aggiungere nel piano il DAST anche per G6; staging disponibile solo dopo P-4/P-2. | tech-lead, devops | rilascio M1 |
 | I-T4 | `docs/07-plan.md` §4.1 | Il contratto non dice cosa succede con `If-Match` malformato (`abc`, `*`, `W/"3"`, negativo). | **Deciso (Q-T1):** `422 invalid_value`; il piano §4.1 va completato. | tech-lead | SL-04 |
-| I-T5 | `docs/02-requirements.md` SR-059 vs SR-070 e `docs/07-plan.md` SL-03/SL-05 | Due limiti simili con ambiti diversi: "300/min per sessione, di cui 60 scritture" (SR-059) e "60 scritture/min per account" (SR-070). Sono compatibili, ma SL-03 realizza il primo e SL-05 il secondo: tra le due slice un account con più sessioni può superare 60 scritture/min in totale. | Nessuna correzione; i test coprono entrambi (7.4). Solo una nota. | tech-lead | – |
+| I-T5 | `docs/02-requirements.md` SR-059 vs SR-070 e `docs/07-plan.md` SL-03/SL-05 | Due limiti simili con ambiti diversi: "300/min per sessione, di cui 60 scritture" (SR-059) e "60 scritture/min per account" (SR-070). Sono compatibili, ma SL-03 realizza il primo e SL-05 il secondo: tra le due slice un account con più sessioni può superare 60 scritture/min in totale. | Nessuna correzione; i test coprono entrambi (7.4). Solo una nota. *Chiuso il 2026-10-23: il limite per account è anticipato in SL-03b (ADR-0006 rev. 6).* | tech-lead | – |
 | I-T6 | `docs/07-plan.md` §1 | Il Makefile prevede solo `dev, test, lint, ci, openapi, seed`. | Aggiungere `test-unit`, `test-db`, `test-int`, `test-sec`, `test-prop`, `test-conc`, `test-contract`, `e2e`, `lighthouse`, `perf`, `smoke`, `nightly`, `prerelease`, `dast` (sezioni 2 e 18). `make test` = unit + db + int + sec + prop (profilo ci) + conc + contract. | tech-lead, devops | SL-00 |
 | I-T7 | `docs/04-architecture.md` §Stack ("Test del frontend: decide il tester") | Scelta ora fatta: Vitest, Testing Library, MSW, Playwright, axe, Lighthouse CI, più Locust per il carico. | Aggiornare la riga dopo G4. | architect | – |
 

@@ -64,10 +64,10 @@ ACCOUNT_RLS_TABLES = frozenset({"session", "export_file"})
 EXPECTED_FAMILY_TABLES_NOW = frozenset(
     {"family", "family_default_meal", "person", "family_bootstrap", "course"}
 )
-# Tabelle non di famiglia presenti alla fine di SL-03a (05-data §6.3): `security_event` (SL-02),
-# `account`, `session` (RLS per account) e `auth_flow` (SL-03a).
+# Tabelle non di famiglia presenti alla fine di SL-03b (05-data §6.3): `security_event` (SL-02),
+# `account`, `session` (RLS per account) e `auth_flow` (SL-03a), `rate_counter` (SL-03b).
 EXPECTED_OTHER_TABLES_NOW = frozenset(
-    {"security_event", "alembic_version", "account", "session", "auth_flow"}
+    {"security_event", "alembic_version", "account", "session", "auth_flow", "rate_counter"}
 )
 # Tabelle non di famiglia con RLS per account esistenti ora (sottoinsieme di ACCOUNT_RLS_TABLES).
 EXPECTED_ACCOUNT_RLS_NOW = frozenset({"session"})

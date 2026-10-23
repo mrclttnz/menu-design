@@ -1,4 +1,5 @@
 import { type RouteObject } from "react-router";
+import { AltroPage } from "../features/altro/AltroPage";
 import { LoginPage } from "../features/auth/LoginPage";
 import { PlanPage } from "../features/plan/PlanPage";
 import { NotFoundPage } from "./NotFoundPage";
@@ -12,7 +13,13 @@ export const routes: RouteObject[] = [
     children: [
       { index: true, element: <HomeRedirect /> },
       { path: "accedi", element: <LoginPage /> },
-      { element: <RequireSession />, children: [{ path: "piano", element: <PlanPage /> }] },
+      {
+        element: <RequireSession />,
+        children: [
+          { path: "piano", element: <PlanPage /> },
+          { path: "altro", element: <AltroPage /> },
+        ],
+      },
       { path: "*", element: <NotFoundPage /> },
     ],
   },

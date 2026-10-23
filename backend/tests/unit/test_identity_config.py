@@ -59,6 +59,7 @@ def test_production_and_staging_accept_google_explicitly_and_by_default(
     app_env: None, monkeypatch: pytest.MonkeyPatch, env: str
 ) -> None:
     monkeypatch.setenv("APP_ENV", env)
+    monkeypatch.setenv("TRUSTED_PROXY_HOPS", "1")  # SEC-SL03b-003: >= 1 in staging e production
     monkeypatch.delenv("OIDC_ISSUER", raising=False)
     _start()  # predefinito = Google
     monkeypatch.setenv("OIDC_ISSUER", GOOGLE_ISSUER)

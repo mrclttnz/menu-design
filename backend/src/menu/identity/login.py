@@ -29,7 +29,7 @@ from menu.identity.flows import (
 )
 from menu.identity.models import AuthOutcomeCode, GoogleIdentity, LoginResolver, Member
 from menu.identity.oidc import OidcClient, OidcError
-from menu.identity.sessions import create_session, drop_session_of_cookie
+from menu.identity.sessions import create_session, drop_session_of_cookie, evict_over_cap
 from menu.identity.tokens import (
     constant_time_equal_bytes,
     digest,
@@ -123,6 +123,22 @@ def _login_event(
     )
 
 
+def _eviction_event(request: CallbackRequest, member: Member, evicted: UUID) -> SecurityEvent:
+    """SR-070: la sessione meno usata, revocata al login oltre la 20ª (AC-047.4)."""
+    return SecurityEvent(
+        event_type=EventType.SESSION_EVICTED,
+        outcome="success",
+        actor_kind="account",
+        actor_account_id=member.account_id,
+        actor_role=member.role,
+        family_id=member.family_id,
+        target_type="session",
+        target_id=evicted,
+        ip=request.ip,
+        correlation_id=request.correlation_id,
+    )
+
+
 def complete_callback(
     oidc: OidcClient, resolver: LoginResolver, handle: str | None, request: CallbackRequest
 ) -> CallbackResult:
@@ -195,6 +211,8 @@ def _sign_in(
         ensure_account()
         drop_session_of_cookie(tx, request.old_session_token)
         tenancy.bind_context(tx, account_id=outcome.account_id)
+        for evicted in evict_over_cap(tx, outcome.account_id):
+            security_log(_eviction_event(request, outcome, evicted), tx)
         token, session_id = create_session(
             tx, outcome.account_id, ip=request.ip, user_agent=request.user_agent
         )

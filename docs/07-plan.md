@@ -238,6 +238,7 @@ Ogni modulo di dominio (strati 5-10) ha la stessa forma interna: `api.py` (route
 | `MealLifecycleListener.on_meal_readded(tx, key)` | `planning` | `attendance` | Pasto tolto e rimesso: cancella le eccezioni dei giorni non congelati (ADR-0009) |
 | `ExportContributor` (`tables`, `export_family(tx)`, `export_self(tx, account_id, person_id)`) | `common` (protocollo e registro) | `family`, `catalog`, `planning`, `attendance`, `history`, `identity` | Perimetro di SR-072; raccolto da `privacy` |
 | `PeriodicTask` (nome, frequenza, funzione idempotente) | `jobs` | moduli che hanno pulizie | Registro del worker (ADR-0013) |
+| `SessionIdentifier` (cookie → `Session(session_id, account_id)` o `None`, in sola lettura, senza rinnovare la sessione) | `ratelimit` | `identity` (`identify_session`), iniettato da `menu.app` nel middleware | Chiavi per sessione e per account del middleware dei limiti (ADR-0006 rev. 6): `ratelimit` (strato 4) non importa `identity` (strato 5) |
 
 **Regola `ExportContributor` (DoD, OBJ-02).** Ogni modulo che possiede una tabella di famiglia registra, **nella slice che crea la tabella**, un `ExportContributor` che dichiara le proprie tabelle e ne produce le righe nei due perimetri (`family` e `self`) secondo `docs/05-data.md` §9.3. Il test d'inventario `tests/tools/export_inventory` fallisce se una tabella con `family_id` (o `family`) non è dichiarata da esattamente un contributore, oppure se un contributore restituisce colonne escluse dal perimetro (email, `last_visit_at`, `dish_sort_preference`, `auth_subject`, IP, sessioni di altri). Il registro e il test nascono in SL-02; SL-23a aggiunge solo la coda, il job e l'impacchettamento.
 
@@ -304,6 +305,8 @@ def record_change(tx: Tx, ctx: RequestContext, *, unit: UnitType, op: Op,
 
 # ratelimit
 def hit(rules: Sequence[RuleHit]) -> None    # un solo INSERT … ON CONFLICT, solleva rate_limited
+SessionIdentifier = Callable[[Mapping[str, str]], Session | None]   # fornito da identity (§2.2)
+class RateLimitMiddleware: ...               # ASGI puro sotto /api/v1, regole dichiarative (ADR-0006 rev. 6)
 
 # access
 def authorize(ctx: RequestContext, operation: str, facts: ResourceFacts | None = None) -> None
@@ -809,15 +812,15 @@ Le stime di moduli e file sono indicative.
 #### SL-03b · Limiti di frequenza, massimo di sessioni, schermata "Altro" · S
 - **Obiettivo:** gli abusi ricevono `429` con contatori condivisi e persistenti, un account non supera 20 sessioni e la persona collegata vede chi è ed esce da "Altro".
 - **US / AC:** US-001 (AC-001.9), US-047 (AC-047.4).
-- **SR:** SR-003 (login), SR-059 (avvio OIDC 30/IP/15 min; API autenticata 300/min per sessione, di cui 60 scritture), SR-070 (massimo 20 sessioni).
-- **THR:** THR-011, THR-012, THR-013 (sessioni), THR-103.
+- **SR:** SR-003 (login), SR-059 (avvio OIDC 30/IP/15 min; API autenticata 300/min per sessione, di cui 60 scritture), SR-070 (60 scritture/min per account, sommando le sessioni; massimo 20 sessioni). *Il limite di 5.000 scritture tracciate al giorno per famiglia resta in SL-05.* *Rinviate (CHG-021, ADR-0006 rev. 6, D2): le righe "Callback OIDC 30/IP/15 min" e "Login fallito 20/IP/15 min" di SR-059, da rivedere con SL-12 o con il ritorno di email e password.*
+- **THR:** THR-011, THR-012, THR-013 (sessioni e account), THR-103.
 - **Migrazioni:** `rate_counter` (`rate_block`, ritardo progressivo del login a password, è rinviata con CHG-020).
-- **Contenuto:** modulo `ratelimit` (regole dichiarative, chiavi HMAC con pepper, un solo upsert per richiesta, `429` + `Retry-After`, evento `rate_limit.exceeded`, fail closed con `503`); middleware del limite generale; revoca della sessione meno recente oltre la 20ª (evento `session.evicted`); S-08 minimo (nome, ruolo, "Esci").
-- **Test:** 31° avvio → `429`; 301ª richiesta e 61ª scrittura per sessione → `429`; contatori dopo un riavvio; concorrenza sui contatori; `X-Forwarded-For` falsificato → IP dell'ultima voce; 21° login.
+- **Contenuto:** modulo `ratelimit` (regole dichiarative, finestra fissa con `date_bin` su `app.now_utc()` e `Retry-After` esatto, chiavi HMAC con pepper, IPv6 al /64 e IPv4-mapped ridotti a IPv4, un solo upsert ordinato e de-duplicato per richiesta, anche le richieste respinte contano, `429` + `Retry-After`, evento `rate_limit.exceeded` una volta per regola e finestra, fail closed con `503`); middleware ASGI puro sotto `/api/v1` con il protocollo `SessionIdentifier` (§2.2), logout esente dalle scritture; `TRUSTED_PROXY_HOPS` ≥ 1 obbligatorio in `staging` e `production`; revoca della sessione meno recente oltre la 20ª (evento `session.evicted`); S-08 minimo (nome, ruolo, "Esci").
+- **Test:** 31° avvio → `429`; 301ª richiesta e 61ª scrittura per sessione → `429`; 61ª scrittura per account con due sessioni → `429`; logout possibile a scritture esaurite; contatori dopo un riavvio; concorrenza sui contatori; salto di finestra; `X-Forwarded-For` falsificato → IP dell'ultima voce; 21° login.
 - **Moduli e file:** circa 12 file.
 - **Dipende da:** SL-03a.
 - **Agenti:** backend-developer, frontend-developer (S-08).
-- **Rischi:** tra SL-03b e SL-05 il limite di 60 scritture è solo per sessione (I-T5): nessun dato di altre famiglie esiste ancora.
+- **Rischi:** a cavallo di due finestre passano fino a 2 volte il limite (finestra fissa, rischio accettato con D1). *Il rischio I-T5 (60 scritture solo per sessione tra SL-03b e SL-05) è chiuso: il limite per account è in SL-03b.*
 
 #### SL-04 · Archivio piatti: creare, modificare, consultare, cercare · M
 - **Obiettivo:** il Pianificatore salva piatti con portate, stato, note, tempo e fonti, e li ritrova per nome, portata e stato.
@@ -835,12 +838,12 @@ Le stime di moduli e file sono indicative.
 #### SL-05 · Eventi di modifica e stato del piatto · S
 - **Obiettivo:** ogni modifica tracciata registra un evento compatto nella stessa transazione, a partire dal cambio di stato del piatto, con i limiti per account e per famiglia.
 - **US / AC:** US-005 (AC-005.1-.4), US-049 (AC-049.2-.5; AC-049.1 in SL-06b).
-- **SR:** SR-022, SR-047, SR-057, SR-070 (60 scritture/min per account, 5.000 tracciate/giorno per famiglia nel fuso della famiglia, allarme).
+- **SR:** SR-022, SR-047, SR-057, SR-070 (5.000 tracciate/giorno per famiglia nel fuso della famiglia, allarme; le 60 scritture/min per account sono già in SL-03b).
 - **THR:** THR-013 (account), THR-046, THR-100, THR-117.
 - **Migrazioni:** `change_event` con trigger d'immutabilità e RLS `p_family_select`/`p_family_insert`.
 - **API:** `POST /dishes/{id}/status`.
-- **Contenuto:** `history` (codec v1, modelli per `unit_type`/`op`/`v`), `tracks` in `authz` e inventario; regole `write_account` e `tracked_family`; contributore di `history`.
-- **Test:** inventario `tracks`; nessun evento su `412` o `403`; nessun nome o email negli eventi; `menu_app` senza `UPDATE`/`DELETE`; 61ª scrittura per account e 5.001ª per famiglia → `429`; proprietà del codec.
+- **Contenuto:** `history` (codec v1, modelli per `unit_type`/`op`/`v`), `tracks` in `authz` e inventario; regola `tracked_family` (`write_account` è già in SL-03b); contributore di `history`.
+- **Test:** inventario `tracks`; nessun evento su `412` o `403`; nessun nome o email negli eventi; `menu_app` senza `UPDATE`/`DELETE`; 5.001ª scrittura tracciata per famiglia → `429`; proprietà del codec.
 - **Moduli e file:** circa 15 file.
 - **Dipende da:** SL-04, SL-03b.
 - **Agenti:** backend-developer, frontend-developer.
@@ -1439,7 +1442,7 @@ Tutte le storie Must, Should e Could di M0-M2 sono coperte da slice pianificate.
 | SR-056 | SL-12, SL-16 | |
 | SR-057 | SL-02, SL-05 | |
 | SR-058 | SL-26 | **processo:** metriche e notifiche (devops) |
-| SR-059 | SL-03b, SL-05, SL-12, SL-23a, SL-32, SL-44 (le righe login fallito, registrazione, recupero password e reinvio della verifica seguono FR-002: backlog SL-33, SL-34, CHG-020) | |
+| SR-059 | SL-03b, SL-05, SL-12, SL-23a, SL-32, SL-44 (le righe login fallito, registrazione, recupero password e reinvio della verifica seguono FR-002: backlog SL-33, SL-34, CHG-020) | Rinviate con CHG-021 (ADR-0006 rev. 6, D2): "Callback OIDC 30/IP/15 min" e "Login fallito 20/IP/15 min", da rivedere con SL-12 o con SL-33/SL-34 |
 | SR-060 | SL-00a, SL-04, SL-06a, SL-06b, SL-13, SL-36, SL-40, SL-44 | |
 | SR-061 | SL-33 (backlog): si applica solo dal primo flusso email (CHG-020) | **processo:** P-14 (solo con SL-33) |
 | SR-062 | SL-10b | **processo:** budget e avvisi (P-2), limite di spesa di Actions (P-1) |
@@ -1450,7 +1453,7 @@ Tutte le storie Must, Should e Could di M0-M2 sono coperte da slice pianificate.
 | SR-067 | SL-23a | |
 | SR-068 | SL-28 | |
 | SR-069 | – | **respinta** (CHG-009) |
-| SR-070 | SL-03b (20 sessioni), SL-05 (per account e per famiglia) | |
+| SR-070 | SL-03b (20 sessioni, 60 scritture/min per account), SL-05 (5.000 tracciate/giorno per famiglia) | |
 | SR-071 | SL-43 | |
 | SR-072 | SL-23a (perimetro), SL-23b (download e cancellazione), SL-28 (riautenticazione), SL-29 | |
 | SR-073 | SL-13 | |

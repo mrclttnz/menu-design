@@ -1,6 +1,9 @@
 # Modello dei dati: Menu Design
 
-> Documento di proprietà del data-architect. Versione 7, 2026-10-23. **Stato: APPROVATO al gate G3** (2026-10-19, versione 4). La versione 5 contiene le correzioni per il gate G4, da approvare con il piano. La versione 6 contiene le correzioni emerse dalla prima esecuzione reale del DDL (SL-02). La versione 7 contiene quelle di SL-03a (migrazione `0005`).
+> Documento di proprietà del data-architect. Versione 8, 2026-10-23. **Stato: APPROVATO al gate G3** (2026-10-19, versione 4). La versione 5 contiene le correzioni per il gate G4, da approvare con il piano. La versione 6 contiene le correzioni emerse dalla prima esecuzione reale del DDL (SL-02). La versione 7 contiene quelle di SL-03a (migrazione `0005`). La versione 8 quelle di SL-03b (migrazione `0006`).
+>
+> **Novità della versione 8** (2026-10-23, SL-03b: migrazione `0006` eseguita su PostgreSQL 17, con `upgrade`, `downgrade -1` e `base ↔ head`):
+> - **`rate_counter`** come nella sezione 4.1 (`pk_rate_counter`, `ck_rate_counter_key`, `ck_rate_counter_count`), più l'indice **`ix_rate_counter_window_start`** per la pulizia oraria (sezione 5). La versione 7 lo elencava tra gli indici volutamente assenti: il numero di righe non è di poche centinaia, perché ogni sessione attiva apre una finestra al minuto e le chiavi per IP crescono con chi attacca. `rate_block` non si crea (CHG-020).
 >
 > **Novità della versione 7** (2026-10-23, SL-03a: migrazione `0005` eseguita su PostgreSQL 17, con `upgrade`, `downgrade -1` e `base ↔ head`):
 > - **`auth_flow` conserva l'esito del callback** (ADR-0004 rev. 3, colmata la lacuna della v6): colonne `consumed_at`, `outcome_code`, `outcome_params`. Il callback reclama la riga una sola volta, il successo la cancella, un esito negativo resta leggibile **una volta** per al massimo 5 minuti dal consumo (sezione 4.1). `purpose` ammette per ora solo `login` e `reauth`: `invite` arriva con `invite_id` (ordine 14 del piano).
@@ -548,7 +551,7 @@ RLS: policy `p_requester FOR ALL TO menu_app USING (requester_account_id = app.c
 
 `rate_block` (ritardo progressivo) è **rinviata con CHG-020**: serve solo al login con password (ADR-0006 rev. 5). Il disegno è nella sezione 4.3.
 
-Tabella normale, non `UNLOGGED`: SR-059 chiede che i contatori sopravvivano ai riavvii, e il volume è minimo.
+Tabella normale, non `UNLOGGED`: SR-059 chiede che i contatori sopravvivano ai riavvii, e il volume è minimo. Nessuna RLS e nessuna `family_id` (sezione 6.3). Indice `ix_rate_counter_window_start` per la pulizia oraria (sezione 5). Migrazione `0006`.
 
 ### 4.2 Tabelle di famiglia (RLS)
 
@@ -945,12 +948,13 @@ Ogni indice è giustificato da una query o da un vincolo. Le PK e gli UQ elencat
 | change_event | `ix_change_event_family_day (family_id, meal_date) WHERE meal_date IS NOT NULL` | Cronologia per giorno e per pasto (FR-045, AC-028.1) |
 | family_notice | `ix_family_notice_family (family_id, created_at)` (M1) | Avvisi attivi della famiglia all'apertura del piano |
 | security_event | `ix_security_event_time (occurred_at)` | Console `security-log --since`, conservazione di 90 giorni e 12 mesi |
+| rate_counter | `ix_rate_counter_window_start (window_start)` | Pulizia oraria del worker (`DELETE … WHERE window_start < app.now_utc() - interval '48 hours'`, sezione 3.4): la PK inizia con `key` e non serve il range. Le righe crescono con le sessioni attive (una finestra al minuto) e con le chiavi per IP di chi attacca, quindi la pulizia resta un range scan anche sotto abuso. L'upsert aggiorna solo `count` (aggiornamento HOT), l'indice costa una voce per finestra nuova. |
 | export_file | `ix_export_file_requester (requester_account_id)` | `GET /exports` (solo i propri) |
 
 **Indici volutamente assenti:**
 - **Trigram su `dish.name_search`.** Al massimo 2.000 piatti per famiglia: `LIKE '%…%'` e `similarity()` (FR-032) su un sottoinsieme già filtrato da `family_id` costano meno di 2 ms. Si aggiunge un GIN `gin_trgm_ops` se una famiglia supera 5.000 righe o se il p95 della ricerca supera 100 ms.
 - **`attendance` per persona e `dish_like` per persona.** Servono solo all'uscita di una persona, un'operazione rara su poche migliaia di righe della famiglia.
-- **`job`, `rate_counter`, `deletion_log` per data.** Tabelle di poche centinaia di righe.
+- **`job`, `deletion_log` per data.** Tabelle di poche centinaia di righe.
 - **Rinviati con CHG-020** (sezione 4.3): UQ parziale `lower(email)` WHERE `auth_provider='password'` su `account` e `ix_account_token_account`. Tornano con la migrazione di FR-002.
 
 ## 6. Isolamento tra famiglie (multi-tenancy)
@@ -1380,7 +1384,8 @@ Sono invece `LANGUAGE plpgsql`, quindi sempre contate: `ensure_frozen`, le funzi
   | `0003` | `security_event`, `ix_security_event_time`, trigger `tg_security_event_immutable` | SL-02 | eseguita |
   | `0004` | `console_bootstrap_family`, `console_security_events`, `console_audit_note` | SL-02 | eseguita |
   | `0005` | `account`, FK `fk_person_account_id_account` (RESTRICT), `session` con `ix_session_account_id` e RLS per account (`p_session_self`, `p_session_expired_select`, `p_session_expired_delete`, `p_owner`, `p_backup`), `auth_flow` (`login`, `reauth`, con l'esito del callback), `session_resolve`, `bootstrap_resolve`; grant a `menu_app` (DML) e `menu_backup` (`SELECT`) | SL-03a | eseguita |
-  | `0006` … | Ordine 6 e seguenti del piano: `rate_counter`, catalogo, eventi, piano, M1 e M2 | | da scrivere |
+  | `0006` | `rate_counter` (PK `key`, `window_start`; CK chiave di 32 byte e `count >= 1`; tabella normale, senza RLS), `ix_rate_counter_window_start`; grant a `menu_app` (DML) e `menu_backup` (`SELECT`), nessuno a `menu_console`. `rate_block` rinviata (CHG-020) | SL-03b | eseguita |
+  | `0007` … | Ordine 7 e seguenti del piano: catalogo, eventi, piano, M1 e M2 | | da scrivere |
   | *rinviata* | Solo se FR-002 viene ripreso (CHG-020): `password_credential`, `account_token`, `rate_block`, modifiche ad `account` della sezione 4.3 | | dopo M2 |
 
   Il `CONNECTION LIMIT` e la revoca di `CREATE` sugli schemi stanno in `db/bootstrap.sql`, perché riguardano ruoli e schemi creati fuori da Alembic. Il test d'inventario li verifica a ogni esecuzione della CI.

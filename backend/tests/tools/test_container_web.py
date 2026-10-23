@@ -18,6 +18,7 @@ from collections.abc import Iterator
 import pytest
 
 from support.paths import REPO
+from support.ratelimit import PEPPER_A
 
 DUMMY_DB = (
     "postgresql+psycopg://menu_app:" + "dummy-container-test" + "@localhost:1/menu"
@@ -51,6 +52,7 @@ def base_url(web_image: str) -> Iterator[str]:
         "run", "-d", "--rm", "--read-only", "--tmpfs", "/tmp",  # noqa: S108
         "-p", "127.0.0.1::8000",
         "-e", "APP_ENV=test", "-e", f"DATABASE_URL_APP={DUMMY_DB}",
+        "-e", "TRUSTED_PROXY_HOPS=0", "-e", f"SESSION_PEPPER={PEPPER_A}",  # SL-03b: senza default
         web_image,
     )  # fmt: skip
     assert run.returncode == 0, run.stderr

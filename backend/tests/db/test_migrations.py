@@ -8,7 +8,6 @@ import pytest
 
 from support import pg
 from support.inventory import (
-    EXPECTED_CONSOLE_SECDEF,
     EXPECTED_IDENTITY_SECDEF,
     EXPECTED_SECDEF_NOW,
     SQL_FUNCTIONS_NOW,
@@ -80,13 +79,23 @@ def test_migrations_never_use_bare_time_functions_except_the_now_utc_body() -> N
     assert sum(p.read_text(encoding="utf-8").count("allow-bare-now:") for p in _revisions()) == 1
 
 
+def _app_tables(conn: psycopg.Connection) -> set[str]:
+    return {
+        r[0]
+        for r in conn.execute(
+            "select relname from pg_class where relnamespace = 'app'::regnamespace "
+            "and relkind = 'r'"
+        ).fetchall()
+    }
+
+
 def _all_inventories(conn: psycopg.Connection, *, state: str) -> None:
-    """`state`: "head" (0005), "previous" (0004, dopo `downgrade -1`), "base" (nessuna)."""
+    """`state`: "head" (0006), "previous" (0005, dopo `downgrade -1`), "base" (nessuna)."""
     assert bare_time_problems(conn) == []
     assert rls_problems(conn) == []
     expected_secdef = {
         "head": EXPECTED_SECDEF_NOW,
-        "previous": EXPECTED_CONSOLE_SECDEF,
+        "previous": EXPECTED_SECDEF_NOW,  # 0006 (SL-03b) non aggiunge funzioni SECURITY DEFINER
         "base": frozenset(),
     }[state]
     assert secdef_problems(conn, expected_secdef) == []
@@ -96,28 +105,24 @@ def _all_inventories(conn: psycopg.Connection, *, state: str) -> None:
             "select proname from pg_proc where pronamespace = 'app'::regnamespace"
         ).fetchall()
     }
-    if state == "head":
+    tables = _app_tables(conn)
+    if state in {"head", "previous"}:
         assert names >= SQL_FUNCTIONS_NOW | EXPECTED_SECDEF_NOW
-    elif state == "previous":
-        # 0004: le funzioni di 0001-0004 restano, i risolutori di 0005 sono spariti (SL-03a).
-        assert names >= SQL_FUNCTIONS_NOW | EXPECTED_CONSOLE_SECDEF, names
+        assert {"account", "session", "auth_flow"} <= tables, tables  # 0005 resta
+        # 0006: `rate_counter` c'è al head e il downgrade -1 la toglie (e solo quella).
+        assert ("rate_counter" in tables) is (state == "head"), tables
+    else:
+        assert names == set(), f"il downgrade ha lasciato funzioni: {names}"
         left = names & EXPECTED_IDENTITY_SECDEF
         assert not left, f"il downgrade ha lasciato {left}"
-        tables = {
-            r[0]
-            for r in conn.execute(
-                "select relname from pg_class where relnamespace = 'app'::regnamespace "
-                "and relkind = 'r'"
-            ).fetchall()
-        }
-        assert not tables & {"account", "session", "auth_flow"}, tables
+        assert not tables & {"account", "session", "auth_flow", "rate_counter"}, tables
+        # `app.person` arriva con una slice successiva: in base non esiste (to_regclass → NULL),
+        # se esiste non deve restare alcuna FK verso account.
         fk = conn.execute(
-            "select count(*) from pg_constraint where conrelid = 'app.person'::regclass "
+            "select count(*) from pg_constraint where conrelid = to_regclass('app.person') "
             "and contype = 'f' and confrelid::regclass::text like '%account'"
         ).fetchone()
         assert fk == (0,), "il downgrade ha lasciato la FK person.account_id"
-    else:
-        assert names == set(), f"il downgrade ha lasciato funzioni: {names}"
 
 
 @pytest.mark.slow

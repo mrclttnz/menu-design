@@ -196,6 +196,10 @@ msgid "common.showMore"
 msgstr "Mostra altri"
 
 #. js-lingui-explicit-id
+msgid "nav.label"
+msgstr "Navigazione principale"
+
+#. js-lingui-explicit-id
 msgid "dish.deleteBlocked"
 msgstr "Nel frattempo questo piatto è stato aggiunto a un pasto, quindi non si può eliminare. Puoi archiviarlo."
 

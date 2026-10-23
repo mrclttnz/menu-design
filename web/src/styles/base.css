@@ -174,3 +174,29 @@ a {
     scroll-behavior: auto !important;
   }
 }
+
+/* Barra di navigazione in basso (DD-06): per ora Piano e Altro; Piatti arriva con la sua slice. */
+.bottom-nav {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  border-top: 2px solid var(--color-divider);
+  background: var(--color-bg);
+}
+
+.bottom-nav a {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--target);
+  padding: var(--space-2) var(--space-4);
+  color: var(--color-text);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.bottom-nav a[aria-current="page"] {
+  color: var(--color-primary-hover);
+  box-shadow: inset 0 -4px 0 var(--color-primary);
+}

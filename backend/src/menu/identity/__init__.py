@@ -30,7 +30,7 @@ from menu.identity.models import (
 )
 from menu.identity.schemas import LogoutRequest
 from menu.identity.services import IdentityServices
-from menu.identity.sessions import SESSION_COOKIE, resolve_session
+from menu.identity.sessions import SESSION_COOKIE, SessionRef, identify_session, resolve_session
 
 register_export_contributor(IdentityExport())
 
@@ -47,11 +47,13 @@ __all__ = [
     "Member",
     "NotMember",
     "SessionInfo",
+    "SessionRef",
     "anonymous_guard",
     "clear_flow_cookie",
     "clear_session_cookie",
     "end_session",
     "ensure_csrf_cookie",
+    "identify_session",
     "read_outcome",
     "request_ip",
     "resolve_session",

@@ -107,8 +107,9 @@ web-build: web-install
 WEB_PORT ?= 8000
 DUMMY_DB_URL = postgresql+psycopg://menu_app:$(DUMMY_DB_PW)@localhost:1/menu?sslmode=verify-full&sslrootcert=/nonexistent/ca.crt
 DUMMY_DB_PW  = dummy-run-web-never-connected
+DUMMY_PEPPER = dummy-run-web-pepper-0123456789abcdef0123456789
 run-web: web-build sync
-	cd $(BACKEND) && APP_ENV=test TRUSTED_PROXY_HOPS=0 WEB_DIST_DIR="$(CURDIR)/$(WEB)/dist" \
+	cd $(BACKEND) && APP_ENV=test TRUSTED_PROXY_HOPS=0 SESSION_PEPPER="$(DUMMY_PEPPER)" WEB_DIST_DIR="$(CURDIR)/$(WEB)/dist" \
 	  APP_BASE_URL="http://127.0.0.1:$(WEB_PORT)" \
 	  DATABASE_URL_APP='$(DUMMY_DB_URL)' \
 	  $(UV) run --frozen python -m menu serve --host 127.0.0.1 --port $(WEB_PORT)

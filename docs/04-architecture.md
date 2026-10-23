@@ -234,7 +234,7 @@ Un modulo non legge le tabelle di un altro: ne chiama i servizi.
 | `history` | `record_change` nella stessa transazione, codec compatto e versionato, diff invertibili, cronologia decodificata con la mappa `refs` (DD-09). Visite settimanali. | `/api/v1/history*` | Python, Pydantic (ADR-0012) |
 | `privacy` | Esportazioni (JSON e CSV con formule neutralizzate, ZIP, perimetro di SR-072), registro delle cancellazioni, eliminazioni, conservazione. | `/api/v1/exports*`, job | Python (libreria standard) |
 | `audit` | Registro di sicurezza (`menu_app` solo `INSERT`, lettura dalla console), eventi strutturati per gli allarmi. | `security_log(event)` | structlog 26.1 |
-| `ratelimit` | Contatori PostgreSQL, un upsert multiriga per richiesta, `429` con `Retry-After`. | Dipendenze FastAPI, middleware | Python + SQL (ADR-0006) |
+| `ratelimit` | Contatori PostgreSQL a finestra fissa (`date_bin` su `app.now_utc()`), un upsert multiriga per richiesta, `429` con `Retry-After` esatto. | Middleware ASGI sotto `/api/v1` con regole dichiarative; protocollo `SessionIdentifier` fornito da `identity` | Python + SQL (ADR-0006 rev. 6) |
 | `jobs` | Coda `job` con `SKIP LOCKED` e compiti periodici, eseguiti dal worker con `menu_app`. Pulizie semplici in SQL normale, funzioni `maint_*` solo dove attraversano famiglie o tabelle di sola aggiunta. | `enqueue()`, CLI | Python (ADR-0013) |
 | `console` | Comandi del Gestore nel job `menu-console`. Email solo come `email_sha256`. Recupero con `console_recover_admin`. | Job `python -m menu console`, script locale con `gcloud` | `argparse` (ADR-0011) |
 | Migrazioni e manutenzione | Schema, policy RLS, funzioni, sempre con `upgrade` e `downgrade`. `maint replay-deletions` con la stessa identità. | `alembic`, CLI | Alembic 1.20 |

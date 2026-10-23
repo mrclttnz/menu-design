@@ -9,7 +9,7 @@ from fastapi import APIRouter, FastAPI
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from menu import family, identity, tenancy, views
+from menu import family, identity, ratelimit, tenancy, views
 from menu.app import health
 from menu.common import AppError
 from menu.platform import Settings, assert_all_routes_declare_authz, configure_logging
@@ -54,7 +54,8 @@ def create_app(
     *,
     health_clock: Callable[[], float] = time.monotonic,
 ) -> FastAPI:
-    settings = Settings()  # APP_ENV e DATABASE_URL_APP obbligatori: fail closed
+    # Fail closed: APP_ENV, DATABASE_URL_APP, TRUSTED_PROXY_HOPS e SESSION_PEPPER sono obbligatori.
+    settings = Settings()
     configure_logging()
 
     @asynccontextmanager
@@ -87,6 +88,12 @@ def create_app(
     app.add_exception_handler(RequestValidationError, validation_error_handler)
     app.add_exception_handler(StarletteHTTPException, http_exception_handler)
     app.add_middleware(BodyGuardMiddleware)
+    app.add_middleware(
+        ratelimit.RateLimitMiddleware,
+        pepper=settings.session_pepper.get_secret_value().encode(),
+        trusted_proxy_hops=settings.trusted_proxy_hops,
+        identify=lambda cookies: identity.identify_session(cookies.get(identity.SESSION_COOKIE)),
+    )
     app.add_middleware(EnvelopeMiddleware)
 
     app.include_router(health.router)

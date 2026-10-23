@@ -26,6 +26,7 @@ export const messages = {
     message: "Ci sta mettendo più del solito…",
   }),
   "common.showMore": msg({ id: "common.showMore", message: "Mostra altri" }),
+  "nav.label": msg({ id: "nav.label", message: "Navigazione principale" }),
   "nav.plan": msg({ id: "nav.plan", message: "Piano" }),
   "nav.dishes": msg({ id: "nav.dishes", message: "Piatti" }),
   "nav.more": msg({ id: "nav.more", message: "Altro" }),

@@ -28,6 +28,19 @@ def client_ip_from(forwarded_for: list[str], peer: str | None, hops: int) -> str
     return (_valid(peer) if peer else None) or UNKNOWN
 
 
+def limit_subject(ip: str) -> str:
+    """Chiave per i limiti per IP (SEC-SL03b-001): IPv6 ridotto al /64, IPv4-mappato a IPv4."""
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return ip
+    if isinstance(addr, ipaddress.IPv6Address):
+        if addr.ipv4_mapped is not None:
+            return str(addr.ipv4_mapped)
+        return str(ipaddress.ip_network(f"{addr}/64", strict=False))
+    return str(addr)
+
+
 def client_ip(request: Request) -> str:
     hops: int = request.app.state.settings.trusted_proxy_hops
     peer = request.client.host if request.client else None

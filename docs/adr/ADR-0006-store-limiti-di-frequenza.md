@@ -1,8 +1,8 @@
 # ADR-0006: Contatori dei limiti di frequenza in PostgreSQL
 
 - **Stato:** ACCEPTED (2026-10-19, gate G3, confermato dopo il secondo giro della revisione critica (nessun blocco))
-- **Data:** 2026-10-18 (revisione 2: backend Python, ADR-0002). Revisione 3 del 2026-10-19: IP del client su Cloud Run e limiti di SR-070, dal threat model. Revisione 4: un solo upsert per richiesta e pulizia senza funzioni privilegiate (OBJ-07). Revisione 5 del 2026-10-19: ritardo progressivo rinviato con il login con password (CHG-020).
-- **Decisori:** architect. Revisione del security-engineer.
+- **Data:** 2026-10-18 (revisione 2: backend Python, ADR-0002). Revisione 3 del 2026-10-19: IP del client su Cloud Run e limiti di SR-070, dal threat model. Revisione 4: un solo upsert per richiesta e pulizia senza funzioni privilegiate (OBJ-07). Revisione 5 del 2026-10-19: ritardo progressivo rinviato con il login con password (CHG-020). Revisione 6 del 2026-10-23 (SL-03b, decisioni D1 e D2 dell'utente, opzioni raccomandate): finestra fissa al posto della stima scorrevole, middleware ASGI con regole dichiarative, righe "Callback OIDC" e "Login fallito per IP" di SR-059 rinviate.
+- **Decisori:** architect, utente (D1 e D2 della revisione 6). Revisione del security-engineer.
 - **Requisiti collegati:** SR-003, SR-036, SR-058, SR-059, SR-060, SR-062
 
 ## Contesto
@@ -45,26 +45,37 @@ Non esiste una libreria Python consolidata con store PostgreSQL. La libreria `ra
 **Opzione A**, modulo `ratelimit`:
 - **Tabella `rate_counter (key bytea, window_start timestamptz, count int, PRIMARY KEY (key, window_start))`**, creata da Alembic.
 - **Algoritmo:**
-  - finestra fissa con stima della finestra scorrevole: si pesa il conteggio della finestra precedente, come nell'algoritmo "sliding window counter";
-  - incremento atomico in **una sola istruzione per richiesta** (OBJ-07): tutte le regole che si applicano alla richiesta (per sessione, per account, per famiglia, per IP) si aggiornano con un'unica `INSERT … VALUES (…), (…), … ON CONFLICT (key, window_start) DO UPDATE SET count = rate_counter.count + 1 RETURNING key, count`, in una transazione `system_tx()` breve e separata da quella di dominio. Il codice confronta i conteggi restituiti con i limiti di ciascuna regola.
+  - **finestra fissa** (rev. 6, decisione D1 dell'utente del 2026-10-23): `window_start = date_bin(<durata della regola>, app.now_utc(), '2000-01-01 00:00:00+00')`, cioè finestre allineate all'orologio del database, uguale per tutte le istanze. *Sostituisce la stima della finestra scorrevole ("sliding window counter") delle revisioni 1-5.*
+    - **Rischio accettato per l'MVP:** a cavallo del confine tra due finestre passano nel caso peggiore fino a **2 volte il limite** (fine di una finestra più inizio della successiva). I limiti servono a smorzare gli abusi, e le credenziali le protegge Google: il raddoppio occasionale non cambia il rischio;
+    - in cambio `Retry-After` è **esatto** (secondi fino alla fine della finestra, al massimo 15 minuti), la logica è più semplice e i test sono deterministici;
+    - **quando rivedere:** se un limite dovrà proteggere un segreto a bassa entropia (per esempio un OTP o un codice breve), quella regola passa a una finestra scorrevole o a un blocco progressivo;
+  - incremento atomico in **una sola istruzione per richiesta** (OBJ-07): tutte le regole che si applicano alla richiesta (per sessione, per account, per famiglia, per IP) si aggiornano con un'unica `INSERT … SELECT … FROM unnest(…) ORDER BY key ON CONFLICT (key, window_start) DO UPDATE SET count = rate_counter.count + 1 RETURNING key, count`, in una transazione `system_tx()` breve e separata da quella di dominio. Le chiavi sono **de-duplicate e ordinate**, così richieste concorrenti prendono i lock nello stesso ordine (niente deadlock). Il codice confronta i conteggi restituiti con i limiti di ciascuna regola;
+  - **anche le richieste respinte incrementano i contatori**: chi continua a insistere oltre il limite non accorcia la propria attesa e non ottiene informazioni sul conteggio.
 - **Ritardo progressivo** — *[rinviato, CHG-020: vale solo per il login con password, spostato nel backlog dopo M2; era M2]*. Nell'MVP non si realizza e la tabella `rate_block` non si crea. Testo di riferimento: tabella `rate_block (key, blocked_until, strikes)`. Il blocco cresce esponenzialmente fino a 15 minuti, mai in modo permanente (SR-036).
 - **Chiavi:** HMAC-SHA-256, con un segreto lato server (pepper), di IP, email normalizzata, ID di sessione, account o famiglia. Nessun identificativo in chiaro (minimizzazione).
-- **Regole:** una tabella dichiarativa in codice, una regola per riga di SR-059. Più regole si combinano (per esempio per identità e per IP).
-- **Applicazione:** dipendenze FastAPI per regola, applicate alle rotte. Il limite generale dell'API autenticata (300 richieste al minuto per sessione, di cui al massimo 60 scritture) è un middleware.
-- **Risposta:** `429` con `Retry-After` e `problem+json` `code=rate_limited`, più l'evento di sicurezza `rate_limit.exceeded` (SR-020, SR-058).
+  - **chiavi per IP:** per IPv6 si usa il **prefisso /64** (un singolo cliente ne controlla di solito un /64 intero), e un indirizzo IPv4-mapped (`::ffff:a.b.c.d`) si riduce all'IPv4 corrispondente, così lo stesso client non ha due contatori.
+- **Regole:** una tabella dichiarativa in codice (`ratelimit.rules`), una regola per riga attiva di SR-059 e SR-070, con nome, limite e durata della finestra. Il nome della regola entra nella chiave HMAC, quindi due regole non condividono il contatore. Più regole si combinano (per esempio per sessione e per account).
+- **Applicazione (rev. 6):** un **middleware ASGI puro** applicato alle rotte sotto `/api/v1`, che legge la tabella delle regole per (metodo, percorso) e il limite generale dell'API autenticata (300 richieste al minuto per sessione, di cui al massimo 60 scritture, più le 60 scritture per account di SR-070). *Sostituisce le dipendenze FastAPI per rotta delle revisioni 1-5*: un solo punto per richiesta e un solo upsert, nessuna rotta dimenticata.
+  - La sessione si riconosce con il protocollo `SessionIdentifier` (dai cookie alla sessione valida, in sola lettura, senza rinnovarla), definito in `ratelimit` e fornito da `identity` in `menu.app`: `ratelimit` (strato 4) non dipende da `identity` (strato 5).
+  - **Logout esente dalle scritture:** `POST /auth/logout` conta nelle 300 richieste della sessione ma non nei contatori di scrittura (per sessione e per account), così chi li ha saturati può sempre uscire (SEC-SL03b-002).
+- **Risposta:** `429` con `Retry-After` esatto e `problem+json` `code=rate_limited`, più l'evento di sicurezza `rate_limit.exceeded` (SR-020, SR-058). L'evento si registra **una sola volta per regola e per finestra**, alla prima richiesta respinta (quando il conteggio restituito è limite + 1): un client che insiste non riempie il registro.
 - **Fail closed:** se il database non risponde, la richiesta riceve `503`.
 - **Pulizia:** il worker (ruolo `menu_app`) cancella ogni ora con SQL normale in `system_tx()` le finestre scadute e i blocchi terminati (ADR-0013). Non serve nessuna funzione privilegiata.
 - **IP del client (A-04, THR-012):**
   - una sola funzione (`platform.http.client_ip`) usata da rate limit, registro di sicurezza e sessioni;
   - su Cloud Run prende **l'ultima voce** di `X-Forwarded-For`, cioè quella aggiunta dal Google Front End. Le voci precedenti le controlla il client e si ignorano;
   - uvicorn non riscrive l'indirizzo (`--proxy-headers` disattivato), per evitare due regole diverse;
-  - la regola è in configurazione (`TRUSTED_PROXY_HOPS=1`), così un cambio di piattaforma non tocca il codice;
+  - la regola è in configurazione (`TRUSTED_PROXY_HOPS=1`), così un cambio di piattaforma non tocca il codice. In `staging` e `production` la configurazione fail-closed **rifiuta l'avvio con `TRUSTED_PROXY_HOPS` < 1** (rev. 6): con 0 tutte le richieste avrebbero l'IP del proxy e condividerebbero un solo contatore;
   - **verifica di devops (V-3 del threat model):** in staging, una richiesta con `X-Forwarded-For` falsificato deve registrare l'IP reale. L'esito si annota in `docs/09-release.md` prima di M0.
 - **Limiti aggiuntivi di SR-070 (A-06, THR-013, THR-100)**, accettati dall'utente:
-  - al massimo **60 scritture al minuto per account**, sommando tutte le sue sessioni (chiave = account), in aggiunta alle 60 per sessione di SR-059;
-  - al massimo **5.000 scritture tracciate al giorno per famiglia** (chiave = famiglia, finestra giornaliera nel fuso della famiglia). Al superamento: `429` con `rate_limited` e allarme al Gestore (SR-058);
+  - al massimo **60 scritture al minuto per account**, sommando tutte le sue sessioni (chiave = account), in aggiunta alle 60 per sessione di SR-059. *Rev. 6: realizzato in SL-03b nello stesso middleware, non più in SL-05;*
+  - al massimo **5.000 scritture tracciate al giorno per famiglia** (chiave = famiglia, finestra giornaliera nel fuso della famiglia). Al superamento: `429` con `rate_limited` e allarme al Gestore (SR-058). Resta in SL-05, che introduce le scritture tracciate;
   - il massimo di 20 sessioni per account è in ADR-0004 (revisione 2).
-- **Test:** un test per ogni riga di SR-059, un test di concorrenza (N richieste parallele non superano il limite), un test di riavvio con i contatori conservati.
+- **Righe di SR-059 rinviate (rev. 6, decisione D2 dell'utente del 2026-10-23):** "Callback OIDC 30 per IP in 15 minuti" e "Login fallito 20 per IP in 15 minuti" **non si realizzano per ora**. Motivi:
+  - ogni callback che fa lavoro (scambio del codice con Google, scritture) richiede un `auth_flow` creato dall'avvio, che è già limitato a 30 per IP in 15 minuti; un callback senza flusso valido non scrive nulla;
+  - il contratto del piano è che il callback risponda sempre `302` verso la SPA; un `429` sul callback romperebbe questo contratto senza ridurre un rischio reale.
+  - **Quando rivedere:** con SL-12 (inviti, quando il callback gestisce anche l'accettazione) oppure quando torna il login con email e password (FR-002, CHG-020).
+- **Test:** un test per ogni riga **attiva** di SR-059 e SR-070 (le righe rinviate sono elencate in SR-059), un test di concorrenza (N richieste parallele non superano il limite), un test di riavvio con i contatori conservati, un test del salto di finestra.
 
 ## Conseguenze
 - Positive: nessuna infrastruttura in più, stesso comportamento in locale e in produzione.
@@ -74,4 +85,6 @@ Non esiste una libreria Python consolidata con store PostgreSQL. La libreria `ra
 - Azioni successive: il data-architect include le tabelle. Il security-engineer rivede l'algoritmo.
 
 ## Quando rivedere
-Se il carico supera qualche centinaio di richieste al secondo: `limits` con Redis.
+- Se il carico supera qualche centinaio di richieste al secondo: `limits` con Redis.
+- Se un limite deve proteggere un segreto a bassa entropia (OTP, codici brevi): finestra scorrevole o blocco progressivo per quella regola (rev. 6, D1).
+- Con SL-12 o con il ritorno del login con password: righe rinviate di SR-059 (rev. 6, D2).
