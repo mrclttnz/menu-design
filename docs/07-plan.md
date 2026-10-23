@@ -635,7 +635,7 @@ La strategia di dettaglio è del tester (`docs/08-test-strategy.md`). Il piano f
 
 ### 5.7 Branch, commit e push
 - Branch principale `main`. Commit automatico **locale** alla fine di ogni slice (impostazione di `docs/STATUS.md`).
-- **Push:** remoto `origin` = `https://github.com/mrclttnz/menu-design` (privato). **Ogni push richiede il consenso esplicito dell'utente**, finché l'utente non cambia la regola. Prima del **primo** push: `gitleaks detect` su tutta la storia, con esito pulito riportato nel report; poi branch protection su `main`.
+- **Push:** remoto `origin` = `https://github.com/mrclttnz/menu-design` (privato). **Push autorizzato dall'utente (2026-10-23, modifica di D-1):** `git push` verso `origin` a ogni punto significativo (fine slice, dopo il commit; fine fase o gate; cambi di documentazione rilevanti), senza chiedere ogni volta. Il **primo** push resta condizionato: prima va eseguito `gitleaks detect` su tutta la storia, con esito pulito riportato nel report; poi branch protection su `main`.
 - Conventional Commits: `type(scope): descrizione`, con `type` in `feat, fix, refactor, test, docs, build, ci, chore, perf, security` e `scope` = modulo. Trailer `Refs: SL-NN, US-NNN`.
 - Mai codice che non compila o test rossi su `main`.
 

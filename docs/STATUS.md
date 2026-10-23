@@ -5,8 +5,8 @@
 | Created | 2026-10-17 |
 | Current phase | P5 Build |
 | Last update | 2026-10-23 |
-| Automatic commit at end of slice | yes (local only; every push needs the user's explicit consent) |
-| Remote | https://github.com/mrclttnz/menu-design (private, created by the user 2026-10-19); run gitleaks on full history before the first push |
+| Automatic commit at end of slice | yes, followed by `git push origin main` at every significant point (end of slice, phase or gate); push pre-authorized by the user 2026-10-23, no per-push consent needed |
+| Remote | https://github.com/mrclttnz/menu-design (private, created by the user 2026-10-19); run gitleaks on full history before the first push (still required, clean result reported before pushing) |
 | Git | repository initialized 2026-10-17, branch main, local commits only |
 | User profile | Experienced developer; knows Python, TypeScript/JavaScript, SQL/PostgreSQL |
 | Missing tools (P-0, block SL-00a) | Docker WSL integration, uv, pnpm, psql; gitleaks (`go install github.com/gitleaks/gitleaks/v8@latest` or release binary), semgrep (`pipx install semgrep`), trivy (`sudo apt install trivy` via Aqua repo, or release binary), osv-scanner (`go install github.com/google/osv-scanner/v2/cmd/osv-scanner@latest`) |

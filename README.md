@@ -91,4 +91,4 @@ Ordine di lettura consigliato: [visione](docs/01-vision.md), [requisiti](docs/02
 
 ## Sicurezza
 
-Le scansioni (segreti, SAST, dipendenze, container) sono bloccanti in CI. Prima del primo push va eseguito gitleaks sull'intera storia. Ogni push richiede il consenso esplicito del proprietario del repository.
+Le scansioni (segreti, SAST, dipendenze, container) sono bloccanti in CI. Prima del primo push va eseguito gitleaks sull'intera storia. Il push verso `origin` avviene a ogni punto significativo (fine slice, fine fase o gate) senza ulteriore consenso, come autorizzato dal proprietario.
