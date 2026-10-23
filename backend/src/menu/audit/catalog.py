@@ -17,6 +17,10 @@ class EventType(StrEnum):
     # Limiti e sessioni (SL-03b, SR-058, SR-070): `rate_limit.exceeded` ha solo la regola.
     RATE_LIMIT_EXCEEDED = "rate_limit.exceeded"
     SESSION_EVICTED = "session.evicted"
+    # Accesso ai dati (SL-04, SR-009, THR-020): permesso mancante e risorsa di un'altra famiglia.
+    # Mai con identificativi o contenuti della risorsa: solo l'operazione.
+    ACCESS_DENIED = "access.denied"
+    ACCESS_CROSS_FAMILY = "access.cross_family"
 
 
 EVENT_TYPES: frozenset[str] = frozenset(e.value for e in EventType)

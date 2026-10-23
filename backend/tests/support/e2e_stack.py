@@ -11,7 +11,10 @@ Lo stub espone la pagina di consenso (identità dal cookie `stub_identity`, vedi
 `fake_oidc_server.py`) e `POST /__seed` per preparare i dati di un test senza toccare il
 database dal browser:
   {"kind": "bootstrap", "email": ..., "familyName": ...}
-  {"kind": "member", "sub": ..., "email": ..., "role": ..., "displayName": ..., "familyName": ...}
+  {"kind": "member", "sub": ..., "email": ..., "role": ..., "displayName": ..., "familyName": ...,
+   "dishes": [{"name": ..., "id"?: ..., "status"?: ..., "courses"?: ["first"], "notes"?: ...,
+               "prepTime"?: ..., "archived"?: bool, "sources"?: [...]}]}
+Con `member` (SL-04) la famiglia ha le 8 portate base e i piatti indicati (creati dal membro).
 Mai su staging né in produzione: lo stub non esiste lì (08 §4.1b).
 """
 
@@ -29,6 +32,7 @@ sys.path.insert(0, str(TESTS))
 
 from support import pg  # noqa: E402
 from support.accounts import make_bootstrap, make_family, make_member  # noqa: E402
+from support.dishes import make_courses, seed_dishes  # noqa: E402
 from support.fake_oidc import CLIENT_ID, CLIENT_SECRET  # noqa: E402
 from support.fake_oidc_server import StubServer  # noqa: E402
 from support.owner import Owner  # noqa: E402
@@ -91,7 +95,7 @@ def main() -> int:
         if payload["kind"] == "bootstrap":
             make_bootstrap(owner, family, payload["email"])
         elif payload["kind"] == "member":
-            make_member(
+            _, person = make_member(
                 owner,
                 family,
                 sub=payload["sub"],
@@ -99,6 +103,8 @@ def main() -> int:
                 role=payload.get("role", "member"),
                 display_name=payload.get("displayName", "Mario Membro"),
             )
+            courses = make_courses(owner, family)
+            seed_dishes(owner, family, person, courses, payload.get("dishes", []))
         else:
             raise ValueError("kind di semina sconosciuto")
 

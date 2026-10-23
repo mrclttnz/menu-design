@@ -16,12 +16,20 @@ msgid "common.required"
 msgstr "(obbligatorio)"
 
 #. js-lingui-explicit-id
+msgid "dish.status.changed.toast"
+msgstr "{name} è ora {status}"
+
+#. js-lingui-explicit-id
 msgid "app.documentTitle"
 msgstr "{title} · {app}"
 
 #. js-lingui-explicit-id
 msgid "error.course_in_use"
 msgstr "{usageCount, plural, one {Questa portata è usata da 1 piatto, quindi non si può eliminare. Cambia prima la portata di quel piatto.} other {Questa portata è usata da # piatti, quindi non si può eliminare. Cambia prima la portata di quei piatti.}}"
+
+#. js-lingui-explicit-id
+msgid "dish.time.30to60"
+msgstr "30-60 minuti"
 
 #. js-lingui-explicit-id
 msgid "auth.login.title"
@@ -44,7 +52,27 @@ msgid "common.add"
 msgstr "Aggiungi"
 
 #. js-lingui-explicit-id
+msgid "dishes.empty.body"
+msgstr "Aggiungi i piatti che cucinate e quelli che vorreste provare."
+
+#. js-lingui-explicit-id
+msgid "dishes.empty.cta"
+msgstr "Aggiungi il primo piatto"
+
+#. js-lingui-explicit-id
+msgid "dish.source.add"
+msgstr "Aggiungi una fonte"
+
+#. js-lingui-explicit-id
 msgid "nav.more"
+msgstr "Altro"
+
+#. js-lingui-explicit-id
+msgid "dish.course.other"
+msgstr "Altro"
+
+#. js-lingui-explicit-id
+msgid "dish.source.type.other"
 msgstr "Altro"
 
 #. js-lingui-explicit-id
@@ -60,8 +88,36 @@ msgid "common.undo"
 msgstr "Annulla"
 
 #. js-lingui-explicit-id
+msgid "dish.course.starter"
+msgstr "Antipasto"
+
+#. js-lingui-explicit-id
+msgid "dish.source.open"
+msgstr "Apri la ricetta (si apre in una nuova scheda)"
+
+#. js-lingui-explicit-id
+msgid "dish.archive"
+msgstr "Archivia"
+
+#. js-lingui-explicit-id
+msgid "dish.archive.confirm.title"
+msgstr "Archiviare «{name}»?"
+
+#. js-lingui-explicit-id
+msgid "dish.status.archived"
+msgstr "Archiviato"
+
+#. js-lingui-explicit-id
+msgid "dish.course.drink"
+msgstr "Bevanda"
+
+#. js-lingui-explicit-id
 msgid "common.loading"
 msgstr "Caricamento…"
+
+#. js-lingui-explicit-id
+msgid "dishes.search"
+msgstr "Cerca per nome"
 
 #. js-lingui-explicit-id
 msgid "common.close"
@@ -72,8 +128,16 @@ msgid "common.loading.slow"
 msgstr "Ci sta mettendo più del solito…"
 
 #. js-lingui-explicit-id
+msgid "dish.status.tested"
+msgstr "Collaudato"
+
+#. js-lingui-explicit-id
 msgid "picker.courseChoice"
 msgstr "Come lo servi?"
+
+#. js-lingui-explicit-id
+msgid "dish.status.memberLocked"
+msgstr "Come Membro puoi proporre solo piatti da provare."
 
 #. js-lingui-explicit-id
 msgid "validation.required"
@@ -88,16 +152,60 @@ msgid "role.member.desc"
 msgstr "Consulta il piano, segna le sue presenze, dice cosa gli piace e propone piatti da provare."
 
 #. js-lingui-explicit-id
+msgid "form.discard.keep"
+msgstr "Continua a modificare"
+
+#. js-lingui-explicit-id
 msgid "auth.login.google"
 msgstr "Continua con Google"
+
+#. js-lingui-explicit-id
+msgid "dish.course.side"
+msgstr "Contorno"
+
+#. js-lingui-explicit-id
+msgid "form.errorSummary"
+msgstr "Controlla questi campi prima di salvare"
+
+#. js-lingui-explicit-id
+msgid "picker.create"
+msgstr "Crea il piatto «{text}»"
+
+#. js-lingui-explicit-id
+msgid "dish.lastCooked"
+msgstr "Cucinato {n, plural, one {1 giorno fa} other {# giorni fa}} ({date})"
+
+#. js-lingui-explicit-id
+msgid "dish.status.toTry"
+msgstr "Da provare"
+
+#. js-lingui-explicit-id
+msgid "dish.source.text"
+msgstr "Descrizione"
+
+#. js-lingui-explicit-id
+msgid "dish.course.dessert"
+msgstr "Dolce"
+
+#. js-lingui-explicit-id
+msgid "dish.sources.title"
+msgstr "Dove trovi la ricetta"
 
 #. js-lingui-explicit-id
 msgid "common.delete"
 msgstr "Elimina"
 
 #. js-lingui-explicit-id
+msgid "dish.delete.confirm.title"
+msgstr "Eliminare «{name}»?"
+
+#. js-lingui-explicit-id
 msgid "account.logout"
 msgstr "Esci"
+
+#. js-lingui-explicit-id
+msgid "form.discard.confirm"
+msgstr "Esci senza salvare"
 
 #. js-lingui-explicit-id
 msgid "validation.duplicate_course"
@@ -110,6 +218,10 @@ msgstr "Fai già parte di una famiglia. In questa versione ogni account può far
 #. js-lingui-explicit-id
 msgid "common.done"
 msgstr "Fatto"
+
+#. js-lingui-explicit-id
+msgid "dish.source.n"
+msgstr "Fonte {n}"
 
 #. js-lingui-explicit-id
 msgid "role.admin.desc"
@@ -136,6 +248,10 @@ msgid "validation.limit_reached"
 msgstr "Hai raggiunto il limite di {max}."
 
 #. js-lingui-explicit-id
+msgid "dish.source.limit"
+msgstr "Hai raggiunto il massimo di {max} fonti."
+
+#. js-lingui-explicit-id
 msgid "error.reauth_wrong_account"
 msgstr "Hai usato un account Google diverso da quello con cui sei collegato. Accedi con {expectedEmailMasked}."
 
@@ -144,8 +260,16 @@ msgid "auth.login.subtitle"
 msgstr "Il piano dei pasti della tua famiglia, sempre in tasca."
 
 #. js-lingui-explicit-id
+msgid "dishes.empty.title"
+msgstr "Il tuo archivio è vuoto"
+
+#. js-lingui-explicit-id
 msgid "common.back"
 msgstr "Indietro"
+
+#. js-lingui-explicit-id
+msgid "dish.source.url"
+msgstr "Indirizzo (https://…)"
 
 #. js-lingui-explicit-id
 msgid "validation.url_invalid"
@@ -176,12 +300,32 @@ msgid "error.sessionExpired"
 msgstr "La sessione è scaduta. Accedi di nuovo per continuare."
 
 #. js-lingui-explicit-id
+msgid "form.discard.body"
+msgstr "Le modifiche che hai fatto andranno perse."
+
+#. js-lingui-explicit-id
+msgid "dish.source.type.book"
+msgstr "Libro"
+
+#. js-lingui-explicit-id
+msgid "dish.source.type.link"
+msgstr "Link"
+
+#. js-lingui-explicit-id
+msgid "dish.neverCooked"
+msgstr "Mai cucinato"
+
+#. js-lingui-explicit-id
 msgid "validation.string_too_long"
 msgstr "Massimo {max} caratteri."
 
 #. js-lingui-explicit-id
 msgid "role.member"
 msgstr "Membro"
+
+#. js-lingui-explicit-id
+msgid "dish.time.under30"
+msgstr "Meno di 30 minuti"
 
 #. js-lingui-explicit-id
 msgid "app.name"
@@ -196,12 +340,32 @@ msgid "common.showMore"
 msgstr "Mostra altri"
 
 #. js-lingui-explicit-id
+msgid "dishes.filter.archived"
+msgstr "Mostra archiviati"
+
+#. js-lingui-explicit-id
 msgid "nav.label"
 msgstr "Navigazione principale"
 
 #. js-lingui-explicit-id
 msgid "dish.deleteBlocked"
 msgstr "Nel frattempo questo piatto è stato aggiunto a un pasto, quindi non si può eliminare. Puoi archiviarlo."
+
+#. js-lingui-explicit-id
+msgid "dishes.noResults"
+msgstr "Nessun piatto trovato"
+
+#. js-lingui-explicit-id
+msgid "dish.field.name"
+msgstr "Nome del piatto"
+
+#. js-lingui-explicit-id
+msgid "dish.archive.confirm.body"
+msgstr "Non comparirà più tra le scelte, ma resterà visibile nei piani passati. Potrai ripristinarlo quando vuoi."
+
+#. js-lingui-explicit-id
+msgid "dish.delete.confirm.body"
+msgstr "Non è mai stato pianificato, quindi verrà eliminato per sempre."
 
 #. js-lingui-explicit-id
 msgid "presence.beforeJoin"
@@ -216,8 +380,20 @@ msgid "error.forbidden"
 msgstr "Non hai il permesso di fare questa operazione."
 
 #. js-lingui-explicit-id
+msgid "dish.time.none"
+msgstr "Non indicato"
+
+#. js-lingui-explicit-id
 msgid "error.network"
 msgstr "Non riesco a collegarmi. Controlla la connessione e riprova."
+
+#. js-lingui-explicit-id
+msgid "dishes.error.load"
+msgstr "Non riusciamo a caricare i piatti. Riprova."
+
+#. js-lingui-explicit-id
+msgid "dish.field.notes.hint"
+msgstr "Non scrivere informazioni sulla salute di nessuno (per esempio allergie)."
 
 #. js-lingui-explicit-id
 msgid "auth.failed"
@@ -232,8 +408,24 @@ msgid "error.notFound"
 msgstr "Non troviamo quello che cerchi. Potrebbe essere stato eliminato."
 
 #. js-lingui-explicit-id
+msgid "dish.source.note"
+msgstr "Nota"
+
+#. js-lingui-explicit-id
+msgid "dish.field.notes"
+msgstr "Note"
+
+#. js-lingui-explicit-id
+msgid "dishes.new"
+msgstr "Nuovo piatto"
+
+#. js-lingui-explicit-id
 msgid "common.today"
 msgstr "Oggi"
+
+#. js-lingui-explicit-id
+msgid "dish.source.page"
+msgstr "Pagina"
 
 #. js-lingui-explicit-id
 msgid "error.notFound.title"
@@ -254,6 +446,30 @@ msgstr "Piano"
 #. js-lingui-explicit-id
 msgid "nav.dishes"
 msgstr "Piatti"
+
+#. js-lingui-explicit-id
+msgid "dishes.title"
+msgstr "Piatti"
+
+#. js-lingui-explicit-id
+msgid "dish.saved.toast"
+msgstr "Piatto salvato"
+
+#. js-lingui-explicit-id
+msgid "dish.course.single"
+msgstr "Piatto unico"
+
+#. js-lingui-explicit-id
+msgid "dish.time.over60"
+msgstr "Più di 60 minuti"
+
+#. js-lingui-explicit-id
+msgid "dish.field.courses"
+msgstr "Portate"
+
+#. js-lingui-explicit-id
+msgid "dish.course.first"
+msgstr "Primo"
 
 #. js-lingui-explicit-id
 msgid "error.quota_exceeded.other_meals_per_day"
@@ -292,6 +508,10 @@ msgid "accept.invalid"
 msgstr "Questo invito non è valido o è scaduto. Chiedi di mandartene uno nuovo."
 
 #. js-lingui-explicit-id
+msgid "dish.archivedBanner"
+msgstr "Questo piatto è archiviato e non compare più tra le scelte."
+
+#. js-lingui-explicit-id
 msgid "validation.dish_archived"
 msgstr "Questo piatto è archiviato e non si può aggiungere. Scegline un altro o ripristinalo dalla scheda."
 
@@ -308,8 +528,20 @@ msgid "validation.invalid_value"
 msgstr "Questo valore non è valido. Controllalo e riprova. Se il problema resta, ricarica la pagina."
 
 #. js-lingui-explicit-id
+msgid "dish.status.markToTry"
+msgstr "Riporta a «da provare»"
+
+#. js-lingui-explicit-id
+msgid "dish.restore"
+msgstr "Ripristina"
+
+#. js-lingui-explicit-id
 msgid "common.retry"
 msgstr "Riprova"
+
+#. js-lingui-explicit-id
+msgid "dish.source.type.magazine"
+msgstr "Rivista"
 
 #. js-lingui-explicit-id
 msgid "common.save"
@@ -321,6 +553,10 @@ msgstr "Scegli al massimo {maxDays} giorni."
 
 #. js-lingui-explicit-id
 msgid "validation.course_required"
+msgstr "Scegli almeno una portata."
+
+#. js-lingui-explicit-id
+msgid "dish.field.courses.hint"
 msgstr "Scegli almeno una portata."
 
 #. js-lingui-explicit-id
@@ -336,16 +572,60 @@ msgid "auth.removed.body"
 msgstr "Se pensi sia un errore, chiedi a un Amministratore di invitarti di nuovo."
 
 #. js-lingui-explicit-id
+msgid "dish.course.second"
+msgstr "Secondo"
+
+#. js-lingui-explicit-id
+msgid "dish.status.markTested"
+msgstr "Segna come collaudato"
+
+#. js-lingui-explicit-id
 msgid "auth.noFamily.title"
 msgstr "Serve un invito"
+
+#. js-lingui-explicit-id
+msgid "dishes.filter.status"
+msgstr "Stato"
+
+#. js-lingui-explicit-id
+msgid "dish.field.status"
+msgstr "Stato"
+
+#. js-lingui-explicit-id
+msgid "dish.time.label"
+msgstr "Tempo di preparazione"
+
+#. js-lingui-explicit-id
+msgid "dish.source.type"
+msgstr "Tipo"
+
+#. js-lingui-explicit-id
+msgid "dish.source.bookTitle"
+msgstr "Titolo"
 
 #. js-lingui-explicit-id
 msgid "common.remove"
 msgstr "Togli"
 
 #. js-lingui-explicit-id
+msgid "dish.source.remove"
+msgstr "Togli questa fonte"
+
+#. js-lingui-explicit-id
+msgid "dishes.back"
+msgstr "Torna ai piatti"
+
+#. js-lingui-explicit-id
 msgid "error.rateLimited"
 msgstr "Troppi tentativi. Riprova tra {seconds, plural, one {# secondo} other {# secondi}}."
+
+#. js-lingui-explicit-id
+msgid "dishes.filter.allCourses"
+msgstr "Tutte le portate"
+
+#. js-lingui-explicit-id
+msgid "dishes.filter.allStatuses"
+msgstr "Tutti gli stati"
 
 #. js-lingui-explicit-id
 msgid "people.lastAdmin.blocked"
@@ -354,6 +634,10 @@ msgstr "Una famiglia deve avere sempre un Amministratore, e al momento sei l'uni
 #. js-lingui-explicit-id
 msgid "auth.noFamily.switch"
 msgstr "Usa un altro account Google"
+
+#. js-lingui-explicit-id
+msgid "form.discard.title"
+msgstr "Uscire senza salvare?"
 
 #. js-lingui-explicit-id
 msgid "nav.skipToContent"

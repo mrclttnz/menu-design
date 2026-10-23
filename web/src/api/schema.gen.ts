@@ -92,6 +92,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/courses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Courses */
+        get: operations["catalog.course.list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dishes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Dishes */
+        get: operations["catalog.dish.list"];
+        put?: never;
+        /** Create Dish */
+        post: operations["catalog.dish.create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dishes/{dishId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Dish */
+        get: operations["catalog.dish.read"];
+        /** Update Dish */
+        put: operations["catalog.dish.update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -146,6 +199,131 @@ export interface components {
             /** Notices */
             notices: components["schemas"]["NoticeView"][];
             authOutcome?: components["schemas"]["AuthOutcomeView"] | null;
+        };
+        /** Course */
+        Course: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Basecode */
+            baseCode: ("starter" | "first" | "second" | "side" | "one_dish" | "dessert" | "drink" | "other") | null;
+            /** Name */
+            name: string | null;
+        };
+        /** CoursePage */
+        CoursePage: {
+            /** Items */
+            items: components["schemas"]["Course"][];
+        };
+        /** DishDetail */
+        DishDetail: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "to_try" | "tested";
+            /** Courseids */
+            courseIds: string[];
+            /** Preptime */
+            prepTime?: ("under_30" | "30_60" | "over_60") | null;
+            /** Archived */
+            archived: boolean;
+            /** Everplanned */
+            everPlanned: boolean;
+            /** Notes */
+            notes?: string | null;
+            /** Sources */
+            sources: components["schemas"]["SourceView"][];
+            /**
+             * Createdby
+             * Format: uuid
+             */
+            createdBy: string;
+            /** Version */
+            version: number;
+        };
+        /** DishPage */
+        DishPage: {
+            /** Items */
+            items: components["schemas"]["DishSummary"][];
+            /** Nextcursor */
+            nextCursor: string | null;
+        };
+        /** DishSummary */
+        DishSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "to_try" | "tested";
+            /** Courseids */
+            courseIds: string[];
+            /** Preptime */
+            prepTime?: ("under_30" | "30_60" | "over_60") | null;
+            /** Archived */
+            archived: boolean;
+            /** Everplanned */
+            everPlanned: boolean;
+        };
+        /**
+         * DishUpdate
+         * @description `PUT`: sostituzione completa della scheda; lo stato cambia con `POST /status` (SL-05).
+         */
+        DishUpdate: {
+            /** Name */
+            name: string;
+            /** Courseids */
+            courseIds: string[];
+            /** Notes */
+            notes?: string | null;
+            /** Preptime */
+            prepTime?: ("under_30" | "30_60" | "over_60") | null;
+            /**
+             * Sources
+             * @default []
+             */
+            sources: components["schemas"]["Source"][];
+        };
+        /**
+         * DishWrite
+         * @description `POST`: come `DishUpdate` più lo stato iniziale (default «da provare»).
+         */
+        DishWrite: {
+            /** Name */
+            name: string;
+            /** Courseids */
+            courseIds: string[];
+            /** Notes */
+            notes?: string | null;
+            /** Preptime */
+            prepTime?: ("under_30" | "30_60" | "over_60") | null;
+            /**
+             * Sources
+             * @default []
+             */
+            sources: components["schemas"]["Source"][];
+            /**
+             * Status
+             * @default to_try
+             * @enum {string}
+             */
+            status: "to_try" | "tested";
         };
         /**
          * ErrorCode
@@ -251,6 +429,34 @@ export interface components {
             } | null;
             /** Errors */
             errors?: components["schemas"]["FieldError"][] | null;
+        };
+        /** Source */
+        Source: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "link" | "book" | "magazine" | "other";
+            /** Reference */
+            reference: string;
+            /** Page */
+            page?: string | null;
+            /** Note */
+            note?: string | null;
+        };
+        /** SourceView */
+        SourceView: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "link" | "book" | "magazine" | "other";
+            /** Reference */
+            reference: string;
+            /** Page */
+            page?: string | null;
+            /** Note */
+            note?: string | null;
         };
         /** StartRequest */
         StartRequest: {
@@ -432,6 +638,174 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Errore (RFC 9457, `code` di ADR-0010) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    "catalog.course.list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoursePage"];
+                };
+            };
+            /** @description Errore (RFC 9457, `code` di ADR-0010) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    "catalog.dish.list": {
+        parameters: {
+            query?: {
+                /** @description Nome, anche parziale */
+                q?: string;
+                courseId?: string | null;
+                status?: ("to_try" | "tested") | null;
+                archived?: boolean;
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DishPage"];
+                };
+            };
+            /** @description Errore (RFC 9457, `code` di ADR-0010) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    "catalog.dish.create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DishWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DishDetail"];
+                };
+            };
+            /** @description Errore (RFC 9457, `code` di ADR-0010) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    "catalog.dish.read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dishId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DishDetail"];
+                };
+            };
+            /** @description Errore (RFC 9457, `code` di ADR-0010) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    "catalog.dish.update": {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag "<n>" */
+                "If-Match"?: string | null;
+            };
+            path: {
+                dishId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DishUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DishDetail"];
+                };
             };
             /** @description Errore (RFC 9457, `code` di ADR-0010) */
             default: {

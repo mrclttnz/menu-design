@@ -90,12 +90,12 @@ def _app_tables(conn: psycopg.Connection) -> set[str]:
 
 
 def _all_inventories(conn: psycopg.Connection, *, state: str) -> None:
-    """`state`: "head" (0006), "previous" (0005, dopo `downgrade -1`), "base" (nessuna)."""
+    """`state`: "head" (0007), "previous" (0006, dopo `downgrade -1`), "base" (nessuna)."""
     assert bare_time_problems(conn) == []
     assert rls_problems(conn) == []
     expected_secdef = {
         "head": EXPECTED_SECDEF_NOW,
-        "previous": EXPECTED_SECDEF_NOW,  # 0006 (SL-03b) non aggiunge funzioni SECURITY DEFINER
+        "previous": EXPECTED_SECDEF_NOW,  # 0007 (SL-04) non aggiunge funzioni SECURITY DEFINER
         "base": frozenset(),
     }[state]
     assert secdef_problems(conn, expected_secdef) == []
@@ -109,13 +109,16 @@ def _all_inventories(conn: psycopg.Connection, *, state: str) -> None:
     if state in {"head", "previous"}:
         assert names >= SQL_FUNCTIONS_NOW | EXPECTED_SECDEF_NOW
         assert {"account", "session", "auth_flow"} <= tables, tables  # 0005 resta
-        # 0006: `rate_counter` c'è al head e il downgrade -1 la toglie (e solo quella).
-        assert ("rate_counter" in tables) is (state == "head"), tables
+        assert "rate_counter" in tables, tables  # 0006 resta dopo `downgrade -1` da 0007
+        # 0007 (SL-04): le tre tabelle dei piatti ci sono al head e il downgrade -1 le toglie.
+        dishes = {"dish", "dish_course", "dish_source"}
+        assert (dishes <= tables) is (state == "head"), tables
+        assert (not dishes & tables) is (state == "previous"), tables
     else:
         assert names == set(), f"il downgrade ha lasciato funzioni: {names}"
         left = names & EXPECTED_IDENTITY_SECDEF
         assert not left, f"il downgrade ha lasciato {left}"
-        assert not tables & {"account", "session", "auth_flow", "rate_counter"}, tables
+        assert not tables & {"account", "session", "auth_flow", "rate_counter", "dish"}, tables
         # `app.person` arriva con una slice successiva: in base non esiste (to_regclass → NULL),
         # se esiste non deve restare alcuna FK verso account.
         fk = conn.execute(

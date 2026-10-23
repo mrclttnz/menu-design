@@ -1,4 +1,5 @@
 import { type RouteObject } from "react-router";
+import { DishesPage, DishFormPage, DishPage } from "../features/dishes";
 import { AltroPage } from "../features/altro/AltroPage";
 import { LoginPage } from "../features/auth/LoginPage";
 import { PlanPage } from "../features/plan/PlanPage";
@@ -18,6 +19,22 @@ export const routes: RouteObject[] = [
         children: [
           { path: "piano", element: <PlanPage /> },
           { path: "altro", element: <AltroPage /> },
+          {
+            path: "piatti",
+            element: <DishesPage />,
+          },
+          {
+            path: "piatti/nuovo",
+            element: <DishFormPage />,
+          },
+          {
+            path: "piatti/:dishId",
+            element: <DishPage />,
+          },
+          {
+            path: "piatti/:dishId/modifica",
+            element: <DishFormPage />,
+          },
         ],
       },
       { path: "*", element: <NotFoundPage /> },

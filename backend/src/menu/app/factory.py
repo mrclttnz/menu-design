@@ -9,7 +9,7 @@ from fastapi import APIRouter, FastAPI
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from menu import family, identity, ratelimit, tenancy, views
+from menu import access, catalog, family, identity, ratelimit, tenancy, views
 from menu.app import health
 from menu.common import AppError
 from menu.platform import Settings, assert_all_routes_declare_authz, configure_logging
@@ -78,6 +78,7 @@ def create_app(
         responses=_PROBLEM_RESPONSE,
     )
     app.state.settings = settings
+    access.configure_denial_cap(settings.session_pepper.get_secret_value().encode())
     app.state.health = health.HealthProbe(health_clock)
     # Collegamento dei protocolli (piano §2.2): `family` decide chi può entrare, `identity` esegue.
     app.state.identity = identity.IdentityServices.build(settings)
@@ -99,6 +100,7 @@ def create_app(
     app.include_router(health.router)
     app.include_router(identity.router)
     app.include_router(views.session_router)
+    app.include_router(catalog.router)
     for router in extra_routers:
         app.include_router(router)
     assert_all_routes_declare_authz(app)

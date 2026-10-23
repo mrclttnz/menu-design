@@ -7,6 +7,11 @@ import { useSession } from "../session";
 
 export const MAIN_ID = "contenuto";
 
+// Nel modulo del piatto (S-07) la barra si nasconde per dare spazio al contenuto (UX §3).
+const hidesNav = (pathname: string): boolean =>
+  pathname === "/piatti/nuovo" ||
+  (pathname.startsWith("/piatti/") && pathname.endsWith("/modifica"));
+
 export function RootLayout(): ReactElement {
   const { _ } = useLingui();
   const { pathname } = useLocation();
@@ -34,9 +39,10 @@ export function RootLayout(): ReactElement {
           <Outlet />
         )}
       </main>
-      {session?.authenticated ? (
+      {session?.authenticated && !hidesNav(pathname) ? (
         <nav className="bottom-nav" aria-label={_("nav.label")}>
           <NavLink to="/piano">{_("nav.plan")}</NavLink>
+          <NavLink to="/piatti">{_("nav.dishes")}</NavLink>
           <NavLink to="/altro">{_("nav.more")}</NavLink>
         </nav>
       ) : null}

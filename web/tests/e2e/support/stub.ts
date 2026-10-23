@@ -65,9 +65,28 @@ export async function seedBootstrap(
   expect(response.status(), await response.text()).toBe(204);
 }
 
+/** Un piatto da preparare con `seedMember` (SL-04): portate per codice base, id facoltativo. */
+export interface SeedDish {
+  name: string;
+  id?: string;
+  status?: "to_try" | "tested";
+  courses?: string[];
+  notes?: string;
+  prepTime?: "under_30" | "30_60" | "over_60";
+  archived?: boolean;
+  sources?: Array<{ kind: string; reference: string; page?: string }>;
+}
+
 export async function seedMember(
   request: APIRequestContext,
-  member: { sub: string; email: string; role?: string; displayName?: string; familyName?: string },
+  member: {
+    sub: string;
+    email: string;
+    role?: string;
+    displayName?: string;
+    familyName?: string;
+    dishes?: SeedDish[];
+  },
 ): Promise<void> {
   const response = await request.post(`${STUB_URL}/__seed`, {
     data: { kind: "member", ...member },

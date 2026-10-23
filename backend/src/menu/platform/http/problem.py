@@ -5,6 +5,7 @@ Il valore ricevuto non viene mai riflesso nella risposta (THR-107).
 """
 
 import json
+import re
 from http import HTTPStatus
 from typing import Any, cast
 
@@ -50,6 +51,14 @@ STATUS_BY_CODE: dict[ErrorCode, int] = {
 
 _URL_TYPES = {"url_parsing", "url_scheme", "url_syntax_error", "url_type", "url_too_long"}
 _LOC_PREFIXES = {"body", "query", "path", "header", "cookie"}
+# Tipi di errore personalizzati dei modelli (`PydanticCustomError`) con un codice dedicato.
+_CUSTOM_CODES = {
+    "value_required": ValidationCode.REQUIRED,
+    "course_required": ValidationCode.COURSE_REQUIRED,
+}
+# Il nome di un campo sconosciuto si riporta solo se ha forma di identificatore: una chiave scelta
+# dal client non deve tornare indietro con un contenuto qualsiasi (THR-107, SR-021).
+_REFLECTABLE_KEY = re.compile(r"[A-Za-z][A-Za-z0-9_]{0,39}")
 
 
 class FieldError(BaseModel):
@@ -126,7 +135,11 @@ def _translate(error: dict[str, Any]) -> dict[str, Any]:
     if kind == "too_long":
         return field_error(field, ValidationCode.LIMIT_REACHED, max=ctx.get("max_length"))
     if kind == "extra_forbidden":
+        if loc and isinstance(loc[-1], str) and not _REFLECTABLE_KEY.fullmatch(loc[-1]):
+            field = _field_path(loc[:-1])
         return field_error(field, ValidationCode.UNKNOWN_FIELD)
+    if kind in _CUSTOM_CODES:
+        return field_error(field, _CUSTOM_CODES[kind])
     if kind in _URL_TYPES:
         return field_error(field, ValidationCode.URL_INVALID)
     if kind.startswith(("date_", "datetime_")):

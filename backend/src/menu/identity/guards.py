@@ -73,3 +73,18 @@ def session_guard(request: Request, response: Response) -> SessionInfo:
     ):
         raise _fail()
     return session
+
+
+def session_reader(request: Request, response: Response) -> SessionInfo:
+    """Dipendenza delle letture con sessione: sessione valida (401), nessun controllo CSRF.
+
+    Le `GET` non hanno effetti (SR-023); rinnova il cookie se la finestra mobile è stata
+    rinnovata ora (AC-001.2).
+    """
+    token = request.cookies.get(SESSION_COOKIE)
+    session = resolve_session(token)
+    if session is None or token is None:
+        raise AppError(ErrorCode.UNAUTHENTICATED)
+    if session.renewed_max_age is not None:
+        set_session_cookie(response, token, session.renewed_max_age)
+    return session

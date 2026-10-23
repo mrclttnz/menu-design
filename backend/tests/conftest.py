@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 from support import pg
 from support.accounts import AlfaWorld, make_alfa
 from support.browser_sim import Browser
+from support.dishes import Actor, Who, World, connect, make_world
 from support.fake_oidc import CLIENT_ID, CLIENT_SECRET, REDIRECT_URI, FakeOidc
 from support.fake_oidc_server import StubServer
 from support.inventory import FamilyTableSpec
@@ -376,3 +377,25 @@ def app_factory(
     finally:
         while opened:
             opened.pop().__exit__(None, None, None)
+
+
+# --- archivio piatti (SL-04): famiglie Alfa e Beta con tutti i ruoli, attori con sessione vera ----
+
+
+@pytest.fixture
+def world(owner: Owner) -> World:
+    """Alfa e Beta, ciascuna con Amministratore, Pianificatore e Membro e le 8 portate base."""
+    return make_world(owner)
+
+
+@pytest.fixture
+def login(auth_client: TestClient, oidc: FakeOidc) -> Callable[[Who], Actor]:
+    """Accede (OIDC finto) come la persona indicata e restituisce l'attore con il suo CSRF.
+
+    Ogni accesso conta nel limite di 30 avvii per IP in 15 minuti: al più ~25 per test.
+    """
+
+    def _login(who: Who) -> Actor:
+        return connect(Browser(auth_client), oidc, who)
+
+    return _login

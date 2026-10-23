@@ -61,6 +61,37 @@ def _seed(sql_for: Any, *, with_family: bool = True) -> Any:
     return seed
 
 
+def seed_dish(owner: Owner, family: UUID) -> None:
+    """Un piatto con portata e fonte (SL-04), con la persona e la portata che richiede."""
+    ensure_family(owner, family)
+    account = make_account(owner)
+    person = uuid4()
+    owner.execute(
+        "insert into app.person (id, family_id, kind, status, account_id, role, joined_on) "
+        "values (%s, %s, 'account', 'active', %s, 'planner', %s)",
+        (person, family, account, FROZEN),
+    )
+    course = uuid4()
+    owner.execute(
+        "insert into app.course (id, family_id, base_code) values (%s, %s, 'second')",
+        (course, family),
+    )
+    dish = uuid4()
+    owner.execute(
+        "insert into app.dish (id, family_id, name, created_by) values (%s, %s, 'Frittata', %s)",
+        (dish, family, person),
+    )
+    owner.execute(
+        "insert into app.dish_course (family_id, dish_id, course_id) values (%s, %s, %s)",
+        (family, dish, course),
+    )
+    owner.execute(
+        "insert into app.dish_source (family_id, dish_id, position, kind, reference) "
+        "values (%s, %s, 0, 'other', 'dal nonno')",
+        (family, dish),
+    )
+
+
 FAMILY_TABLE_SPECS: dict[str, FamilyTableSpec] = {
     "family": FamilyTableSpec(
         seed=lambda o, f: ensure_family(o, f),
@@ -80,6 +111,30 @@ FAMILY_TABLE_SPECS: dict[str, FamilyTableSpec] = {
         insert_sql=lambda f: (
             "insert into app.course (family_id, base_code) values (%s, 'first')",
             (f,),
+        ),
+    ),
+    # SL-04: piatti, portate dei piatti, fonti. Gli INSERT di prova puntano a righe che la RLS
+    # respinge prima di ogni FK, quindi gli identificativi possono essere casuali.
+    "dish": FamilyTableSpec(
+        seed=lambda o, f: seed_dish(o, f),
+        insert_sql=lambda f: (
+            "insert into app.dish (family_id, name, created_by) values (%s, 'X', %s)",
+            (f, uuid4()),
+        ),
+    ),
+    "dish_course": FamilyTableSpec(
+        seed=lambda o, f: seed_dish(o, f),
+        insert_sql=lambda f: (
+            "insert into app.dish_course (family_id, dish_id, course_id) values (%s, %s, %s)",
+            (f, uuid4(), uuid4()),
+        ),
+    ),
+    "dish_source": FamilyTableSpec(
+        seed=lambda o, f: seed_dish(o, f),
+        insert_sql=lambda f: (
+            "insert into app.dish_source (family_id, dish_id, position, kind, reference) "
+            "values (%s, %s, 0, 'other', 'x')",
+            (f, uuid4()),
         ),
     ),
 }

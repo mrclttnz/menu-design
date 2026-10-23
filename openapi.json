@@ -235,6 +235,332 @@
           "pendingDeletion": "allowed"
         }
       }
+    },
+    "/api/v1/courses": {
+      "get": {
+        "summary": "List Courses",
+        "operationId": "catalog.course.list",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoursePage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Errore (RFC 9457, `code` di ADR-0010)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-authz": {
+          "scope": "family",
+          "roles": [
+            "admin",
+            "planner",
+            "member"
+          ]
+        }
+      }
+    },
+    "/api/v1/dishes": {
+      "get": {
+        "summary": "List Dishes",
+        "operationId": "catalog.dish.list",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 120,
+              "description": "Nome, anche parziale",
+              "default": "",
+              "title": "Q"
+            },
+            "description": "Nome, anche parziale"
+          },
+          {
+            "name": "courseId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Courseid"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "to_try",
+                    "tested"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "archived",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Archived"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DishPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Errore (RFC 9457, `code` di ADR-0010)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-authz": {
+          "scope": "family",
+          "roles": [
+            "admin",
+            "planner",
+            "member"
+          ]
+        }
+      },
+      "post": {
+        "summary": "Create Dish",
+        "operationId": "catalog.dish.create",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DishWrite"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DishDetail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Errore (RFC 9457, `code` di ADR-0010)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-authz": {
+          "scope": "family",
+          "roles": [
+            "admin",
+            "planner"
+          ]
+        }
+      }
+    },
+    "/api/v1/dishes/{dishId}": {
+      "get": {
+        "summary": "Read Dish",
+        "operationId": "catalog.dish.read",
+        "parameters": [
+          {
+            "name": "dishId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Dishid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DishDetail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Errore (RFC 9457, `code` di ADR-0010)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-authz": {
+          "scope": "family",
+          "roles": [
+            "admin",
+            "planner",
+            "member"
+          ]
+        }
+      },
+      "put": {
+        "summary": "Update Dish",
+        "operationId": "catalog.dish.update",
+        "parameters": [
+          {
+            "name": "dishId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Dishid"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ETag \"<n>\"",
+              "title": "If-Match"
+            },
+            "description": "ETag \"<n>\""
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DishUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DishDetail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Errore (RFC 9457, `code` di ADR-0010)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-authz": {
+          "scope": "family",
+          "roles": [
+            "admin",
+            "planner"
+          ]
+        }
+      }
     }
   },
   "components": {
@@ -394,6 +720,391 @@
           "notices"
         ],
         "title": "AuthenticatedSession"
+      },
+      "Course": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "baseCode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "starter",
+                  "first",
+                  "second",
+                  "side",
+                  "one_dish",
+                  "dessert",
+                  "drink",
+                  "other"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basecode"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "baseCode",
+          "name"
+        ],
+        "title": "Course"
+      },
+      "CoursePage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Course"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "CoursePage"
+      },
+      "DishDetail": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "to_try",
+              "tested"
+            ],
+            "title": "Status"
+          },
+          "courseIds": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Courseids"
+          },
+          "prepTime": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "under_30",
+                  "30_60",
+                  "over_60"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preptime"
+          },
+          "archived": {
+            "type": "boolean",
+            "title": "Archived"
+          },
+          "everPlanned": {
+            "type": "boolean",
+            "title": "Everplanned"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/SourceView"
+            },
+            "type": "array",
+            "title": "Sources"
+          },
+          "createdBy": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Createdby"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "status",
+          "courseIds",
+          "archived",
+          "everPlanned",
+          "sources",
+          "createdBy",
+          "version"
+        ],
+        "title": "DishDetail"
+      },
+      "DishPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DishSummary"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextcursor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "title": "DishPage"
+      },
+      "DishSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "to_try",
+              "tested"
+            ],
+            "title": "Status"
+          },
+          "courseIds": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Courseids"
+          },
+          "prepTime": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "under_30",
+                  "30_60",
+                  "over_60"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preptime"
+          },
+          "archived": {
+            "type": "boolean",
+            "title": "Archived"
+          },
+          "everPlanned": {
+            "type": "boolean",
+            "title": "Everplanned"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "status",
+          "courseIds",
+          "archived",
+          "everPlanned"
+        ],
+        "title": "DishSummary"
+      },
+      "DishUpdate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Name"
+          },
+          "courseIds": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Courseids"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "prepTime": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "under_30",
+                  "30_60",
+                  "over_60"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preptime"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/Source"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Sources",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "courseIds"
+        ],
+        "title": "DishUpdate",
+        "description": "`PUT`: sostituzione completa della scheda; lo stato cambia con `POST /status` (SL-05)."
+      },
+      "DishWrite": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Name"
+          },
+          "courseIds": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Courseids"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "prepTime": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "under_30",
+                  "30_60",
+                  "over_60"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preptime"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/Source"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Sources",
+            "default": []
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "to_try",
+              "tested"
+            ],
+            "title": "Status",
+            "default": "to_try"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "courseIds"
+        ],
+        "title": "DishWrite",
+        "description": "`POST`: come `DishUpdate` più lo stato iniziale (default «da provare»)."
       },
       "ErrorCode": {
         "type": "string",
@@ -634,6 +1345,102 @@
         ],
         "title": "ProblemDetails",
         "description": "Schema pubblicato in OpenAPI per ogni risposta d'errore."
+      },
+      "Source": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "link",
+              "book",
+              "magazine",
+              "other"
+            ],
+            "title": "Kind"
+          },
+          "reference": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "Reference"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "reference"
+        ],
+        "title": "Source"
+      },
+      "SourceView": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "link",
+              "book",
+              "magazine",
+              "other"
+            ],
+            "title": "Kind"
+          },
+          "reference": {
+            "type": "string",
+            "title": "Reference"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "reference"
+        ],
+        "title": "SourceView"
       },
       "StartRequest": {
         "properties": {

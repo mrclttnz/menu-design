@@ -17,7 +17,7 @@ from menu.identity.cookies import (
 )
 from menu.identity.export import IdentityExport
 from menu.identity.flows import FLOW_COOKIE, read_outcome
-from menu.identity.guards import anonymous_guard, session_guard
+from menu.identity.guards import anonymous_guard, session_guard, session_reader
 from menu.identity.logout import end_session
 from menu.identity.models import (
     AuthOutcomeRead,
@@ -59,5 +59,6 @@ __all__ = [
     "resolve_session",
     "router",
     "session_guard",
+    "session_reader",
     "set_session_cookie",
 ]

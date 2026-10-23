@@ -4,7 +4,8 @@
 strutturato con gli stessi campi, senza l'IP completo (piano §5.3, SR-051, SR-058).
 """
 
+from menu.audit.cap import bump
 from menu.audit.catalog import EVENT_TYPES, EventType
 from menu.audit.log import SecurityEvent, security_log
 
-__all__ = ["EVENT_TYPES", "EventType", "SecurityEvent", "security_log"]
+__all__ = ["EVENT_TYPES", "EventType", "SecurityEvent", "bump", "security_log"]

@@ -12,7 +12,11 @@ from support.inventory import EXPECTED_FAMILY_TABLES_NOW, app_tables
 
 Connect = Callable[..., psycopg.Connection]
 # `security_event.id` è GENERATED ALWAYS: l'UPDATE fallirebbe prima del controllo dei permessi.
-_UPDATE_COLUMN = {"family_default_meal": "meal_type", "security_event": "outcome"}
+_UPDATE_COLUMN = {
+    "family_default_meal": "meal_type",
+    "security_event": "outcome",
+    "dish_course": "course_id",
+}
 PRIVS = ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER")
 
 

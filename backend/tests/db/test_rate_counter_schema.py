@@ -207,8 +207,6 @@ def test_the_migration_is_revision_0006_after_0005() -> None:
     cfg = Config(str(BACKEND / "alembic.ini"))
     cfg.set_main_option("script_location", str(BACKEND / "migrations"))
     script = ScriptDirectory.from_config(cfg)
-    current = script.get_current_head()
-    assert current is not None
-    head: Any = script.get_revision(current)
+    head: Any = script.get_revision("0006")
     assert head.revision == "0006"
     assert head.down_revision == "0005"

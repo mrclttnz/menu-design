@@ -61,8 +61,18 @@ NON_FAMILY_TABLES = frozenset(
 ACCOUNT_RLS_TABLES = frozenset({"session", "export_file"})
 # SL-02: tabelle di famiglia create da questa slice (05-data §4.2: `family` filtra su `id`,
 # le altre su `family_id`); ogni slice successiva estende questi elenchi.
+# SL-04 aggiunge `dish`, `dish_course`, `dish_source` (migrazione 0007).
 EXPECTED_FAMILY_TABLES_NOW = frozenset(
-    {"family", "family_default_meal", "person", "family_bootstrap", "course"}
+    {
+        "family",
+        "family_default_meal",
+        "person",
+        "family_bootstrap",
+        "course",
+        "dish",
+        "dish_course",
+        "dish_source",
+    }
 )
 # Tabelle non di famiglia presenti alla fine di SL-03b (05-data §6.3): `security_event` (SL-02),
 # `account`, `session` (RLS per account) e `auth_flow` (SL-03a), `rate_counter` (SL-03b).

@@ -1,6 +1,13 @@
 # Modello dei dati: Menu Design
 
-> Documento di proprietà del data-architect. Versione 8, 2026-10-23. **Stato: APPROVATO al gate G3** (2026-10-19, versione 4). La versione 5 contiene le correzioni per il gate G4, da approvare con il piano. La versione 6 contiene le correzioni emerse dalla prima esecuzione reale del DDL (SL-02). La versione 7 contiene quelle di SL-03a (migrazione `0005`). La versione 8 quelle di SL-03b (migrazione `0006`).
+> Documento di proprietà del data-architect. Versione 9, 2026-10-23. **Stato: APPROVATO al gate G3** (2026-10-19, versione 4). La versione 5 contiene le correzioni per il gate G4, da approvare con il piano. La versione 6 contiene le correzioni emerse dalla prima esecuzione reale del DDL (SL-02). La versione 7 contiene quelle di SL-03a (migrazione `0005`). La versione 8 quelle di SL-03b (migrazione `0006`).
+>
+> **Novità della versione 9** (2026-10-23, SL-04: migrazione `0007` eseguita su PostgreSQL 17, con `upgrade`, `downgrade -1` e `base ↔ head`):
+> - **`dish`, `dish_course`, `dish_source`** come nella sezione 4.2, senza le colonne di M2. `dish.name` ha `ck_dish_name` (non vuoto, non solo spazi), `dish_source.reference` un `CHECK` di non vuoto.
+> - **FK diretta `family_id → family ON DELETE CASCADE` anche sulle parti** (`dish_course`, `dish_source`): necessaria perché PostgreSQL esegue le cascate RI in ampiezza e il controllo `NO ACTION` di `dish_course → course` scatterebbe prima della cascata dal piatto (sezione 4, "Regola `ON DELETE`"). Vale anche per le tabelle future come `meal_item`.
+> - `dish_source` senza `UQ (family_id, id)`: nessuna FK la referenzia (come `family_bootstrap`).
+> - **Eccezione voluta alla regola "`text` + `CHECK`" della v6:** `dish.name`, `dish.notes` e i campi di `dish_source` restano `varchar(n)` come nella sezione 4.2 e nei test di SL-04. Un valore troppo lungo dà 22001 (`string_data_right_truncation`); l'app valida i limiti prima dell'`INSERT` (SR-024).
+> - Indice `ix_dish_family_name`: lo spareggio per `id` del cursore usa un ordinamento incrementale (sezione 5); tolta la menzione della ricerca per prefisso, che Q4 non usa.
 >
 > **Novità della versione 8** (2026-10-23, SL-03b: migrazione `0006` eseguita su PostgreSQL 17, con `upgrade`, `downgrade -1` e `base ↔ head`):
 > - **`rate_counter`** come nella sezione 4.1 (`pk_rate_counter`, `ck_rate_counter_key`, `ck_rate_counter_count`), più l'indice **`ix_rate_counter_window_start`** per la pulizia oraria (sezione 5). La versione 7 lo elencava tra gli indici volutamente assenti: il numero di righe non è di poche centinaia, perché ogni sessione attiva apre una finestra al minuto e le chiavi per IP crescono con chi attacca. `rate_block` non si crea (CHG-020).
@@ -369,6 +376,7 @@ Notazione: **PK** chiave primaria, **UQ** unico, **FK** chiave esterna, **CK** c
 - `CASCADE` dalla famiglia verso tutte le sue tabelle (eliminazione definitiva) e dal "contenitore" verso le sue parti (piatto → fonti, portate e tag; pasto → voci);
 - `NO ACTION` sui riferimenti storici (persona, piatto e portata usati in un pasto). Il controllo avviene a fine istruzione, quindi la cascata dalla famiglia, che cancella genitori e figli nella stessa istruzione, è ammessa. La cancellazione isolata di un oggetto ancora referenziato invece è rifiutata. **Verificato in SL-02** (`tests/db/test_family_schema.py`): con `family.deletion_requested_by` e `family_bootstrap.redeemed_person_id` che puntano a una persona, `DELETE FROM family` (anche da `menu_app` nel contesto) cancella tutto, mentre `DELETE FROM person` isolato dà `foreign_key_violation`.
 - `RESTRICT` dove il database deve imporre una procedura, per esempio non si cancella un account con una `person` attiva.
+- **FK diretta verso la famiglia anche per le "parti"** (verificato in SL-04 su PostgreSQL 17): ogni tabella di famiglia ha `family_id → family ON DELETE CASCADE`, anche quando ha già la FK composite verso il suo contenitore (per esempio `dish_course`, `dish_source`, e in futuro `meal_item`). PostgreSQL esegue i trigger RI delle cascate in ampiezza, nell'ordine in cui li accoda: senza la FK diretta, `DELETE FROM family` cancella al livello 1 portate e piatti, poi al livello 2 il controllo `NO ACTION` di `dish_course → course` scatta **prima** della cascata piatto → `dish_course`, accodata dopo, e la cancellazione della famiglia fallisce con `foreign_key_violation`. Con la FK diretta le righe delle parti spariscono al livello 1, prima di ogni controllo. Il caso di `person` in SL-02 funzionava perché i riferimenti (`family_bootstrap`, `family`) erano già al livello 1.
 
 ### 4.1 Tabelle non di famiglia
 
@@ -700,7 +708,7 @@ Una portata in uso non si elimina: `dish_course` e `meal_item` la referenziano c
 |---|---|---|---|---|---|
 | id | uuid | no | `gen_random_uuid()` | PK. UQ (`family_id`, `id`) | |
 | family_id | uuid | no | | FK → `family` ON DELETE CASCADE | Quota di 2.000 per famiglia (SR-060) |
-| name | varchar(120) | no | | CK lunghezza 1-120 | Nomi duplicati ammessi (FR-032) |
+| name | varchar(120) | no | | `ck_dish_name`: `char_length(name) BETWEEN 1 AND 120 AND btrim(name) <> ''` | Nomi duplicati ammessi (FR-032). Oltre 120 caratteri: `string_data_right_truncation` (22001), come le altre colonne `varchar(n)` di questa tabella. |
 | name_search | text | no | `GENERATED ALWAYS AS (app.search_norm(name)) STORED` | | Minuscole senza accenti (FR-030, ASM-047) |
 | status | text | no | `'to_try'` | CK in (`to_try`, `tested`) | |
 | notes | varchar(2000) | sì | | | Avviso sui dati sanitari nell'interfaccia (SR-032) |
@@ -720,13 +728,13 @@ La cancellazione definitiva di un piatto è ammessa solo se `ever_planned = fals
 #### dish_course, dish_tag, dish_source (M0, tag M2)
 | Tabella | Campo | Tipo | Null | Vincoli / note |
 |---|---|---|---|---|
-| dish_course | family_id, dish_id, course_id | uuid | no | PK (`family_id`, `dish_id`, `course_id`). FK (`family_id`, `dish_id`) → `dish` ON DELETE CASCADE. FK (`family_id`, `course_id`) → `course` NO ACTION. "Almeno una portata" lo garantisce l'app nella transazione che incrementa `dish.version`. |
+| dish_course | family_id, dish_id, course_id | uuid | no | PK (`family_id`, `dish_id`, `course_id`). FK `family_id` → `family` ON DELETE CASCADE (necessaria, vedi "Regola `ON DELETE`"). FK (`family_id`, `dish_id`) → `dish` ON DELETE CASCADE. FK (`family_id`, `course_id`) → `course` NO ACTION. "Almeno una portata" lo garantisce l'app nella transazione che incrementa `dish.version`. |
 | dish_tag | family_id, dish_id, tag_id | uuid | no | PK (`family_id`, `dish_id`, `tag_id`). FK → `dish` CASCADE. FK → `tag` **CASCADE**: eliminare un tag lo toglie dai piatti (FR-023). Massimo 20 per piatto, controllato dall'app. |
-| dish_source | id | uuid | no | PK. UQ (`family_id`, `id`). |
-| dish_source | family_id, dish_id | uuid | no | FK (`family_id`, `dish_id`) → `dish` ON DELETE CASCADE. |
+| dish_source | id | uuid | no | PK. Niente `UQ (family_id, id)`: nessuna FK punta alle fonti (come `family_bootstrap`). |
+| dish_source | family_id, dish_id | uuid | no | FK `family_id` → `family` ON DELETE CASCADE. FK (`family_id`, `dish_id`) → `dish` ON DELETE CASCADE. |
 | dish_source | position | smallint | no | CK `BETWEEN 0 AND 9`. UQ (`family_id`, `dish_id`, `position`) `DEFERRABLE INITIALLY IMMEDIATE`: **al massimo 10 fonti** nel database (FR-024). |
 | dish_source | kind | text | no | CK in (`link`, `book`, `magazine`, `other`). |
-| dish_source | reference | varchar(500) | no | URL per `link` (CK `kind<>'link' OR reference ~* '^https?://'`). Titolo per libro e rivista. Testo per altro (SR-024). |
+| dish_source | reference | varchar(500) | no | CK `btrim(reference) <> ''`. URL per `link` (`ck_dish_source_link_http`: `kind<>'link' OR reference ~* '^https?://'`). Titolo per libro e rivista. Testo per altro (SR-024). |
 | dish_source | page | varchar(20) | sì | CK `page IS NULL OR kind IN ('book','magazine')`. |
 | dish_source | note | varchar(500) | sì | |
 
@@ -939,7 +947,7 @@ Ogni indice è giustificato da una query o da un vincolo. Le PK e gli UQ elencat
 | person | `ux_person_account_single_family (account_id) WHERE account_id IS NOT NULL` | ASM-050 atomico. Risoluzione della membership a ogni richiesta, tramite la policy `p_person_self`. |
 | invite | UQ `token_hash` | Risoluzione dell'invito tramite hash (SR-043) |
 | invite | `ix_invite_family_created (family_id, created_at)` | Elenco degli inviti, conteggio di quelli in sospeso e dei 20 al giorno (SR-063) |
-| dish | `ix_dish_family_name (family_id, name_search)` | Elenco dell'archivio ordinato per nome con paginazione (FR-030, FR-031). Ricerca per prefisso. Le ricerche "contiene" filtrano al massimo 2.000 righe per famiglia, quindi non serve un indice trigram (vedi sotto). |
+| dish | `ix_dish_family_name (family_id, name_search)` | Elenco dell'archivio ordinato per nome con paginazione a cursore su (`name_search`, `id`) (FR-030, FR-031). Lo spareggio per `id` lo fa un ordinamento incrementale sui soli omonimi, senza ordinare l'intera famiglia (piano verificato in SL-04 con 1.500 piatti). La ricerca Q4 è "contiene" (`LIKE '%…%'`) e filtra al massimo 2.000 righe per famiglia, quindi non serve un indice trigram (vedi sotto). L'indice non serve a `LIKE 'x%'` con una collation diversa da `C`, e non lo si chiede. |
 | dish | `ix_dish_family_priority (family_id, priority DESC, name_search)` (**M2**) | Ordinamento dell'archivio per priorità con paginazione, quando è l'ordinamento preferito dell'account (`account.dish_sort_preference`). Si crea con la colonna `priority`. |
 | dish_course | `ix_dish_course_course (family_id, course_id)` | Filtro per portata (FR-030), conteggio degli utilizzi e controllo FK all'eliminazione di una portata (AC-033.3) |
 | dish_tag | `ix_dish_tag_tag (family_id, tag_id)` | Filtro per tag (FR-031), cascata all'eliminazione di un tag |
@@ -1385,7 +1393,8 @@ Sono invece `LANGUAGE plpgsql`, quindi sempre contate: `ensure_frozen`, le funzi
   | `0004` | `console_bootstrap_family`, `console_security_events`, `console_audit_note` | SL-02 | eseguita |
   | `0005` | `account`, FK `fk_person_account_id_account` (RESTRICT), `session` con `ix_session_account_id` e RLS per account (`p_session_self`, `p_session_expired_select`, `p_session_expired_delete`, `p_owner`, `p_backup`), `auth_flow` (`login`, `reauth`, con l'esito del callback), `session_resolve`, `bootstrap_resolve`; grant a `menu_app` (DML) e `menu_backup` (`SELECT`) | SL-03a | eseguita |
   | `0006` | `rate_counter` (PK `key`, `window_start`; CK chiave di 32 byte e `count >= 1`; tabella normale, senza RLS), `ix_rate_counter_window_start`; grant a `menu_app` (DML) e `menu_backup` (`SELECT`), nessuno a `menu_console`. `rate_block` rinviata (CHG-020) | SL-03b | eseguita |
-  | `0007` … | Ordine 7 e seguenti del piano: catalogo, eventi, piano, M1 e M2 | | da scrivere |
+  | `0007` | `dish` (senza `priority` e `promotion_dismissed_on`), `dish_course`, `dish_source`; CK di dominio, `ck_dish_archived_requires_planned`, trigger `tg_dish_ever_planned_monotonic`; FK composite e FK dirette verso `family`; `ix_dish_family_name`, `ix_dish_course_course`; RLS standard (`p_family`, `p_owner`, `p_backup`), DML a `menu_app`, `SELECT` a `menu_backup`, nulla a `menu_console`; nessuna funzione `SECURITY DEFINER` | SL-04 | eseguita |
+  | `0008` … | Ordine 8 e seguenti del piano: eventi, piano, M1 e M2 | | da scrivere |
   | *rinviata* | Solo se FR-002 viene ripreso (CHG-020): `password_credential`, `account_token`, `rate_block`, modifiche ad `account` della sezione 4.3 | | dopo M2 |
 
   Il `CONNECTION LIMIT` e la revoca di `CREATE` sugli schemi stanno in `db/bootstrap.sql`, perché riguardano ruoli e schemi creati fuori da Alembic. Il test d'inventario li verifica a ogni esecuzione della CI.

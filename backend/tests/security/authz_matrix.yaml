@@ -1,0 +1,120 @@
+# Matrice dei permessi dei TEST (08 §7.1). Scritta dal tester leggendo "Ruoli e permessi" di
+# docs/02-requirements.md e le tabelle di docs/07-plan.md §4.3: NON è generata dal codice e NON
+# deve essere derivata dalla tabella di `menu.access` (sarebbe una tautologia).
+#
+# Una riga per operationId. Campi:
+#   method, path   la rotta (percorso OpenAPI)
+#   scope, roles, rules   ciò che `x-authz` deve dichiarare ORA (insiemi)
+#   anonymous      esito atteso senza sessione (401), oppure "public"
+#   cells          esito per ruolo con una richiesta valida: allow | 403 | 404
+#   final          (solo documentazione) permesso a regime, dove una slice successiva lo cambia
+#   cross_family   "path" (id nel percorso), "body" (id nel corpo), "query" (id nei parametri),
+#                  "none" (nessun id: elenco della propria famiglia)
+#   unsafe         true per i metodi non sicuri
+# Le operazioni elencate sotto `future:` non esistono ancora come rotte: servono al test della
+# matrice di `menu.access` («una riga per operazione, anche futura», piano SL-04).
+operations:
+  platform.health.read:
+    method: get
+    path: /healthz
+    scope: public
+    roles: []
+    rules: []
+    anonymous: public
+    cross_family: none
+    unsafe: false
+  identity.session.read:
+    method: get
+    path: /api/v1/session
+    scope: public
+    roles: []
+    rules: []
+    anonymous: public
+    cross_family: none
+    unsafe: false
+  identity.google.start:
+    method: post
+    path: /api/v1/auth/google/start
+    scope: anonymous
+    roles: []
+    rules: []
+    anonymous: public
+    cross_family: none
+    unsafe: true
+  identity.google.callback:
+    method: get
+    path: /api/v1/auth/google/callback
+    scope: public
+    roles: []
+    rules: []
+    anonymous: public
+    cross_family: none
+    unsafe: false
+  identity.session.logout:
+    method: post
+    path: /api/v1/auth/logout
+    scope: account
+    roles: []
+    rules: []
+    anonymous: 401
+    cross_family: none
+    unsafe: true
+  catalog.course.list:
+    method: get
+    path: /api/v1/courses
+    scope: family
+    roles: [admin, planner, member]
+    rules: []
+    anonymous: 401
+    cells: {admin: allow, planner: allow, member: allow}
+    cross_family: none
+    unsafe: false
+  catalog.dish.list:
+    method: get
+    path: /api/v1/dishes
+    scope: family
+    roles: [admin, planner, member]
+    rules: []
+    anonymous: 401
+    cells: {admin: allow, planner: allow, member: allow}
+    cross_family: query        # courseId
+    unsafe: false
+  catalog.dish.create:
+    method: post
+    path: /api/v1/dishes
+    scope: family
+    roles: [admin, planner]
+    rules: []
+    anonymous: 401
+    cells: {admin: allow, planner: allow, member: 403}
+    final: {member: "allow se status assente o to_try (member_own_to_try), da SL-17"}
+    cross_family: body         # courseIds
+    unsafe: true
+  catalog.dish.read:
+    method: get
+    path: /api/v1/dishes/{dishId}
+    scope: family
+    roles: [admin, planner, member]
+    rules: []
+    anonymous: 401
+    cells: {admin: allow, planner: allow, member: allow}
+    cross_family: path
+    unsafe: false
+  catalog.dish.update:
+    method: put
+    path: /api/v1/dishes/{dishId}
+    scope: family
+    roles: [admin, planner]
+    rules: []
+    anonymous: 401
+    cells: {admin: allow, planner: allow, member: 403}
+    final: {member: "allow solo sui propri piatti da provare e mai pianificati (member_own_to_try), da SL-17"}
+    cross_family: path_and_body   # dishId e courseIds
+    unsafe: true
+
+# Operazioni di slice successive, nomi PROPOSTI dal tester (vedi report: NEEDS_DECISION sui nomi).
+# Solo i permessi che non richiedono fatti sulla risorsa (06-requisiti "Archivio piatti").
+future:
+  catalog.dish.set_status:     {slice: SL-05, allow: [admin, planner], deny: [member]}
+  catalog.dish.archive:        {slice: SL-08, allow: [admin, planner], deny: [member]}
+  catalog.dish.restore:        {slice: SL-08, allow: [admin, planner], deny: [member]}

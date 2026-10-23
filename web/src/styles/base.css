@@ -9,6 +9,20 @@ html {
   -webkit-text-size-adjust: 100%;
 }
 
+/* Il contenuto scorre dentro <main>; la barra in basso sta sotto, mai sopra le righe (WCAG 2.5.8). */
+#root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+}
+
+main {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
 body {
   margin: 0;
   background: var(--color-bg);
@@ -175,10 +189,9 @@ a {
   }
 }
 
-/* Barra di navigazione in basso (DD-06): per ora Piano e Altro; Piatti arriva con la sua slice. */
+/* Barra di navigazione in basso (DD-06): Piano, Piatti e Altro. */
 .bottom-nav {
-  position: sticky;
-  bottom: 0;
+  flex: none;
   display: flex;
   border-top: 2px solid var(--color-divider);
   background: var(--color-bg);
