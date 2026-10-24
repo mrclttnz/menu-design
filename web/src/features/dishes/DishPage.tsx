@@ -1,6 +1,6 @@
 import { useLingui } from "@lingui/react";
 import { useQuery } from "@tanstack/react-query";
-import type { ReactElement } from "react";
+import { useState, type ReactElement } from "react";
 import { Link, useParams } from "react-router";
 import {
   hostOf,
@@ -16,6 +16,7 @@ import {
 import { ErrorState } from "../../components/ErrorState";
 import { Page } from "../../components/Page";
 import { Skeleton } from "../../components/Skeleton";
+import { StatusCommand } from "./StatusCommand";
 import { NotFoundState } from "./NotFoundState";
 import { RequestFailed, useCanWriteDishes, useCourseLabel, useCourses } from "./shared";
 import "./dishes.css";
@@ -45,8 +46,9 @@ export function DishPage(): ReactElement {
   const courses = useCourses();
   const label = useCourseLabel(courses.data);
   const dish = useQuery({ ...dishQuery(String(dishId)), enabled: valid });
+  const [gone, setGone] = useState(false);
 
-  if (!valid) return <NotFoundState />;
+  if (!valid || gone) return <NotFoundState />;
   if (dish.isError) {
     const error = dish.error;
     if (error instanceof RequestFailed && error.status === 404) return <NotFoundState />;
@@ -85,6 +87,7 @@ export function DishPage(): ReactElement {
       <p>
         <span className="badge">{_(STATUS_KEYS[data.status])}</span>
       </p>
+      {canWrite ? <StatusCommand dish={data} onGone={() => setGone(true)} /> : null}
       {data.everPlanned ? null : <p>{_("dish.neverCooked")}</p>}
       {data.prepTime && Object.hasOwn(PREP_KEYS, data.prepTime) ? (
         <dl className="facts">

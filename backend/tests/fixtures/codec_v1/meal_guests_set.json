@@ -1,0 +1,22 @@
+{
+  "name": "meal_guests_set",
+  "unit_type": "meal_guests",
+  "op": "set",
+  "before": {
+    "g": 0,
+    "gn": null
+  },
+  "after": {
+    "v": 1,
+    "g": 3,
+    "gn": "due bambini"
+  },
+  "state_before": {
+    "g": 0,
+    "gn": null
+  },
+  "state_after": {
+    "g": 3,
+    "gn": "due bambini"
+  }
+}

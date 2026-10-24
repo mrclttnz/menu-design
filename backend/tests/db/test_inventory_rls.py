@@ -13,6 +13,7 @@ import psycopg
 import pytest
 
 from support.inventory import (
+    APPEND_ONLY_FAMILY_TABLES,
     EXPECTED_FAMILY_TABLES_NOW,
     EXPECTED_TABLES_NOW,
     FamilyTableSpec,
@@ -44,9 +45,15 @@ def test_family_table_policies_filter_on_the_right_column(catalog: psycopg.Conne
     colonna sbagliata passerebbe l'ispezione generica ma non isolerebbe nulla."""
     tables = app_tables(catalog)
     assert tables["family"]["policies"]["p_family"]["using"].replace(" ", "").startswith("(id=")
-    for name in sorted(EXPECTED_FAMILY_TABLES_NOW - {"family"}):
+    for name in sorted(EXPECTED_FAMILY_TABLES_NOW - {"family"} - APPEND_ONLY_FAMILY_TABLES):
         using = tables[name]["policies"]["p_family"]["using"].replace(" ", "")
         assert "family_id=app.current_family_id()" in using, (name, using)
+    for name in sorted(APPEND_ONLY_FAMILY_TABLES):  # SL-05: SELECT e INSERT separate (ADR-0012)
+        pols = tables[name]["policies"]
+        assert "p_family" not in pols, f"{name}: una policy FOR ALL permetterebbe UPDATE/DELETE"
+        for pname in ("p_family_select", "p_family_insert"):
+            expr = (pols[pname]["using"] or pols[pname]["check"]).replace(" ", "")
+            assert "family_id=app.current_family_id()" in expr, (name, pname, expr)
 
 
 def test_alembic_version_lives_in_schema_app(catalog: psycopg.Connection) -> None:
@@ -153,7 +160,7 @@ def test_generic_isolation_catches_a_permissive_with_check(
     assert any("INSERT con family_id di B accettato" in p for p in problems), problems
 
 
-@pytest.mark.parametrize("table", sorted(EXPECTED_FAMILY_TABLES_NOW))
+@pytest.mark.parametrize("table", sorted(EXPECTED_FAMILY_TABLES_NOW - APPEND_ONLY_FAMILY_TABLES))
 def test_real_family_tables_isolate_families(
     table: str,
     owner: Owner,

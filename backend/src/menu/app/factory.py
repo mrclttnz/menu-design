@@ -79,6 +79,7 @@ def create_app(
     )
     app.state.settings = settings
     access.configure_denial_cap(settings.session_pepper.get_secret_value().encode())
+    ratelimit.configure_tracked_writes(settings.session_pepper.get_secret_value().encode())
     app.state.health = health.HealthProbe(health_clock)
     # Collegamento dei protocolli (piano §2.2): `family` decide chi può entrare, `identity` esegue.
     app.state.identity = identity.IdentityServices.build(settings)

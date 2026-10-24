@@ -423,6 +423,68 @@ test.describe("US-006: cercare e filtrare", () => {
   });
 });
 
+test.describe("US-005: stato del piatto (S-06)", () => {
+  test("AC-005.1-.3: segna come collaudato, «Annulla», e lo stato resta dopo il ricaricamento", async ({
+    page,
+    context,
+    request,
+  }) => {
+    const { seen, dialogs } = await enter(page, context, request, {
+      label: "stato",
+      dishes: [PURE],
+    });
+    await page.goto("/piatti");
+    await page.getByRole("link", { name: /Purè di patate/ }).click();
+    await expect(page.getByRole("heading", { level: 1, name: "Purè di patate" })).toBeVisible();
+    await noOverflow(page);
+    await page.getByRole("button", { name: "Segna come collaudato" }).click();
+    await expect(page.getByRole("button", { name: "Riporta a «da provare»" })).toBeVisible();
+    await expect(page.getByRole("main").locator(".badge")).toHaveText("Collaudato");
+    await expect(page.getByText("Purè di patate è ora Collaudato")).toBeVisible();
+    await expectNoSeriousA11y(page, "S-06 dopo il cambio di stato");
+
+    await page.reload();
+    await expect(page.getByRole("main").locator(".badge")).toHaveText("Collaudato");
+
+    await page.getByRole("button", { name: "Riporta a «da provare»" }).click();
+    await expect(page.getByRole("main").locator(".badge")).toHaveText("Da provare");
+    // «Annulla» rimette lo stato di prima (collaudato) con la versione nuova
+    await page.getByRole("button", { name: "Annulla" }).click();
+    await expect(page.getByRole("main").locator(".badge")).toHaveText("Collaudato");
+    expect(dialogs).toEqual([]);
+    expect(seen.pageErrors).toEqual([]);
+    expect(await seen.cspViolations()).toEqual([]);
+  });
+
+  test("412: se qualcun altro ha cambiato la scheda, il cambio è rifiutato e la scheda si rilegge", async ({
+    page,
+    context,
+    request,
+  }) => {
+    await enter(page, context, request, { label: "stato412", dishes: [PURE] });
+    await page.goto("/piatti");
+    await page.getByRole("link", { name: /Purè di patate/ }).click();
+    await expect(page.getByRole("heading", { level: 1, name: "Purè di patate" })).toBeVisible();
+    // un'altra sessione cambia lo stato dopo che la scheda è stata letta
+    const id = page.url().split("/").pop() as string;
+    const me = await (await page.request.get("/api/v1/session")).json();
+    const current = await page.request.get(`/api/v1/dishes/${id}`);
+    const version = JSON.parse((await current.text()) || "{}").version as number;
+    const other = await page.request.post(`/api/v1/dishes/${id}/status`, {
+      headers: {
+        "X-CSRF-Token": me.csrfToken,
+        Origin: new URL(page.url()).origin,
+        "If-Match": `"${version}"`,
+      },
+      data: { status: "tested" },
+    });
+    expect(other.status()).toBe(200);
+    await page.getByRole("button", { name: "Segna come collaudato" }).click();
+    await expect(page.getByRole("alert")).toContainText("Qualcuno ha modificato questi dati");
+    await expect(page.getByRole("button", { name: "Riporta a «da provare»" })).toBeVisible();
+  });
+});
+
 test.describe("permessi e isolamento", () => {
   test("DD-04: un Membro consulta ma non vede «Nuovo piatto» né «Mostra archiviati»", async ({
     page,
@@ -437,6 +499,7 @@ test.describe("permessi e isolamento", () => {
     await page.getByRole("link", { name: /Pasta e ceci/ }).click();
     await expect(page.getByRole("heading", { level: 1, name: "Pasta e ceci" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Modifica" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Riporta a|Segna come/ })).toHaveCount(0);
     // anche chiamando direttamente il server: 403, nessun piatto creato (SR-009)
     const me = await (await page.request.get("/api/v1/session")).json();
     const courses = (await (await page.request.get("/api/v1/courses")).json()).items;

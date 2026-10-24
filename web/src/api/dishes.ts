@@ -34,6 +34,8 @@ export const sourceField = (index: number, name: keyof typeof SOURCE_FIELD): str
   `sources[${index}].${name}`;
 
 export const STATUS_VALUES: DishStatus[] = ["to_try", "tested"];
+/** Lo stato a cui porta il comando di S-06. */
+export const NEXT_STATUS: Record<DishStatus, DishStatus> = { to_try: "tested", tested: "to_try" };
 export const PREP_VALUES: PrepTime[] = ["under_30", "30_60", "over_60"];
 export const DEFAULT_STATUS: DishStatus = "to_try";
 export const ARCHIVED_ON = "true";
@@ -97,6 +99,19 @@ export function updateDish(
   });
 }
 
+/** Cambio di stato (SL-05, US-005): solo `{status}`; la versione viaggia in `If-Match` (ADR-0008). */
+export function setDishStatus(
+  id: string,
+  version: number,
+  status: DishStatus,
+): Promise<ApiResult<DishDetail>> {
+  const body: components["schemas"]["StatusChange"] = { status };
+  return api.post<DishDetail>(`/api/v1/dishes/${encodeURIComponent(id)}/status`, {
+    body,
+    ifMatch: version,
+  });
+}
+
 /** Chiave di catalogo dell'etichetta di una portata base. */
 export const COURSE_KEYS: Record<string, string> = {
   starter: "dish.course.starter",
@@ -112,6 +127,12 @@ export const COURSE_KEYS: Record<string, string> = {
 export const STATUS_KEYS: Record<DishStatus, string> = {
   to_try: "dish.status.toTry",
   tested: "dish.status.tested",
+};
+
+/** Etichetta del comando che porta il piatto allo stato indicato (S-06). */
+export const STATUS_COMMAND_KEYS: Record<DishStatus, string> = {
+  tested: "dish.status.markTested",
+  to_try: "dish.status.markToTry",
 };
 
 export const PREP_KEYS: Record<PrepTime, string> = {

@@ -29,9 +29,21 @@ describe("impostazioni efficaci di pnpm", () => {
     expect(Number(value)).toBeGreaterThanOrEqual(10_080);
   });
 
-  it("nessuna eccezione al cooldown", () => {
+  // Unica eccezione ammessa (decisione utente 2026-10-24, SEC-SL05-002): happy-dom@21.0.4, datata.
+  // Dal 2026-10-27 il cooldown generale include da solo quella versione: l'eccezione va tolta.
+  const EXCEPTION = "happy-dom@21.0.4";
+  const EXCEPTION_UNTIL = "2026-10-31";
+
+  it("nessuna eccezione al cooldown oltre a quella datata di happy-dom", () => {
     const value = pnpmConfig("minimumReleaseAgeExclude");
-    expect(value === undefined || (Array.isArray(value) && value.length === 0)).toBe(true);
+    if (value === undefined) return;
+    expect(Array.isArray(value)).toBe(true);
+    const list = value as string[];
+    expect(list.every((entry) => entry === EXCEPTION)).toBe(true);
+    if (list.length > 0) {
+      const today = new Date().toISOString().slice(0, 10);
+      expect(today < EXCEPTION_UNTIL, "l'eccezione al cooldown e' scaduta: toglila").toBe(true);
+    }
   });
 
   it("gli script di installazione sono ammessi solo per esbuild", () => {

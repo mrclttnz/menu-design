@@ -1,6 +1,7 @@
 """Contratto OpenAPI dell'archivio piatti (SL-04; piano §4.2, §4.3; SR-010, SR-024, SR-060).
 
-Cinque operazioni: `catalog.course.list`, `catalog.dish.list|create|read|update`. Il contratto
+Sei operazioni: `catalog.course.list`, `catalog.dish.list|create|read|update` e, da SL-05,
+`catalog.dish.set_status` (`POST /dishes/{dishId}/status`). Il contratto
 è additivo: i campi M1/M2 (`priority`, `tagIds`, `likes`, `promotionProposed`) NON ci sono ancora.
 I limiti di AC-004.5 e SR-060 sono nello schema, non solo nel codice.
 """
@@ -15,6 +16,7 @@ OPS = {
     ("post", "/api/v1/dishes"): "catalog.dish.create",
     ("get", "/api/v1/dishes/{dishId}"): "catalog.dish.read",
     ("put", "/api/v1/dishes/{dishId}"): "catalog.dish.update",
+    ("post", "/api/v1/dishes/{dishId}/status"): "catalog.dish.set_status",  # SL-05
 }
 M1_M2_FIELDS = {"priority", "tagIds", "likes", "promotionProposed", "promotionDismissedOn"}
 
@@ -164,11 +166,54 @@ def test_course_list_shape(generated_schema: dict[str, Any]) -> None:
     assert set(course["properties"]) == {"id", "baseCode", "name"}
 
 
-def test_there_is_no_delete_archive_or_status_operation_yet(
+def test_there_is_no_delete_archive_or_restore_operation_yet(
     generated_schema: dict[str, Any],
 ) -> None:
-    """SL-05 (status), SL-08 (archive, restore, delete) arrivano dopo: non anticiparle."""
+    """SL-08 (archive, restore, delete) arriva dopo: non anticiparle. Lo stato è di SL-05."""
     item = generated_schema["paths"].get("/api/v1/dishes/{dishId}", {})
     assert set(item) == {"get", "put"}
-    for suffix in ("status", "archive", "restore"):
+    for suffix in ("archive", "restore"):
         assert f"/api/v1/dishes/{{dishId}}/{suffix}" not in generated_schema["paths"]
+
+
+# --- SL-05: POST /dishes/{dishId}/status ---------------------------------------------------------
+
+STATUS_PATH = "/api/v1/dishes/{dishId}/status"
+
+
+def test_status_body_is_closed_with_a_required_two_valued_status(
+    generated_schema: dict[str, Any],
+) -> None:
+    op = _op(generated_schema, "post", STATUS_PATH)
+    body = _body(generated_schema, op)
+    assert body.get("additionalProperties") is False, "extra='forbid' (SR-010)"
+    assert set(body["properties"]) == {"status"}
+    assert body["required"] == ["status"]
+    status = _resolve(generated_schema, body["properties"]["status"])
+    assert set(status["enum"]) == {"to_try", "tested"}
+
+
+def test_status_requires_if_match_and_documents_its_errors(
+    generated_schema: dict[str, Any],
+) -> None:
+    op = _op(generated_schema, "post", STATUS_PATH)
+    headers = {p["name"] for p in op.get("parameters", []) if p["in"] == "header"}
+    assert "If-Match" in headers
+    assert {"200", "401", "403", "404", "412", "422", "428", "429"} <= set(op["responses"])
+
+
+def test_status_returns_a_dish_detail_with_etag(generated_schema: dict[str, Any]) -> None:
+    op = _op(generated_schema, "post", STATUS_PATH)
+    detail = _response(generated_schema, op, "200")
+    read = _response(
+        generated_schema, _op(generated_schema, "get", "/api/v1/dishes/{dishId}"), "200"
+    )
+    assert detail == read, "stessa forma di GET /dishes/{dishId} (DishDetail)"
+    assert "ETag" in op["responses"]["200"].get("headers", {})
+
+
+def test_status_declares_tracks_and_the_matrix_roles(generated_schema: dict[str, Any]) -> None:
+    authz = _op(generated_schema, "post", STATUS_PATH)["x-authz"]
+    assert authz["scope"] == "family"
+    assert set(authz["roles"]) == {"admin", "planner"}
+    assert "dish" in authz["tracks"], "T(dish): scrive un evento di modifica (ADR-0012)"

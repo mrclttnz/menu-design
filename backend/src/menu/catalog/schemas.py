@@ -114,6 +114,12 @@ class DishWrite(DishUpdate):
     status: DishStatus = "to_try"
 
 
+class StatusChange(Body):
+    """`POST /status`: solo il nuovo stato (la scheda si modifica con `PUT`)."""
+
+    status: DishStatus
+
+
 class SourceView(View):
     kind: SourceKind
     reference: str

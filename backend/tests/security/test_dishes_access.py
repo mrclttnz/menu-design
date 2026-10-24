@@ -43,12 +43,13 @@ UNSAFE_OPS = [op for op in CATALOG_OPS if MATRIX[op]["unsafe"]]
 CELLS = [(op, role) for op in CATALOG_OPS for role in ("admin", "planner", "member")]
 
 
-def test_the_matrix_covers_the_five_archive_operations() -> None:
+def test_the_matrix_covers_the_six_archive_operations() -> None:
     assert CATALOG_OPS == [
         "catalog.course.list",
         "catalog.dish.create",
         "catalog.dish.list",
         "catalog.dish.read",
+        "catalog.dish.set_status",  # SL-05
         "catalog.dish.update",
     ]
 

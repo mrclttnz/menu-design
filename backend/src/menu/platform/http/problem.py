@@ -151,7 +151,11 @@ async def app_error_handler(_: Request, exc: Exception) -> Response:
     exc = cast(AppError, exc)
     params = dict(exc.params)
     errors = params.pop("errors", None) if exc.code is ErrorCode.VALIDATION else None
-    return problem_response(exc.code, params, errors)
+    response = problem_response(exc.code, params, errors)
+    retry = params.get("retryAfterSeconds")
+    if exc.code is ErrorCode.RATE_LIMITED and isinstance(retry, int):
+        response.headers["Retry-After"] = str(retry)
+    return response
 
 
 async def validation_error_handler(_: Request, exc: Exception) -> Response:

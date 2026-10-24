@@ -111,10 +111,22 @@ operations:
     final: {member: "allow solo sui propri piatti da provare e mai pianificati (member_own_to_try), da SL-17"}
     cross_family: path_and_body   # dishId e courseIds
     unsafe: true
+  # SL-05 (piano §4.2): `{status}` + `If-Match`; permessi A e P, il Membro riceve 403 (AC-005.4).
+  # `tracks`: la rotta scrive un evento di modifica per l'unità «piatto» (T(dish), ADR-0012).
+  catalog.dish.set_status:
+    method: post
+    path: /api/v1/dishes/{dishId}/status
+    scope: family
+    roles: [admin, planner]
+    rules: []
+    anonymous: 401
+    cells: {admin: allow, planner: allow, member: 403}
+    cross_family: path
+    unsafe: true
+    tracks: [dish]
 
 # Operazioni di slice successive, nomi PROPOSTI dal tester (vedi report: NEEDS_DECISION sui nomi).
 # Solo i permessi che non richiedono fatti sulla risorsa (06-requisiti "Archivio piatti").
 future:
-  catalog.dish.set_status:     {slice: SL-05, allow: [admin, planner], deny: [member]}
   catalog.dish.archive:        {slice: SL-08, allow: [admin, planner], deny: [member]}
   catalog.dish.restore:        {slice: SL-08, allow: [admin, planner], deny: [member]}

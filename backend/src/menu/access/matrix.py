@@ -18,14 +18,24 @@ OPERATIONS: dict[str, frozenset[Role]] = {
     "catalog.dish.read": EVERYONE,
     "catalog.dish.create": ADMIN_PLANNER,
     "catalog.dish.update": ADMIN_PLANNER,
-    # Operazioni future dell'archivio (SL-05, SL-08): la regola c'è prima della rotta.
     "catalog.dish.set_status": ADMIN_PLANNER,
+    # Operazioni future dell'archivio (SL-08): la regola c'è prima della rotta.
     "catalog.dish.archive": ADMIN_PLANNER,
     "catalog.dish.restore": ADMIN_PLANNER,
+}
+
+
+# Unità tracciate dalle scritture che registrano un evento di modifica (`x-authz.tracks`, ADR-0012):
+# l'inventario in pytest confronta questa tabella con i test marcati `tracks`.
+TRACKS: dict[str, tuple[str, ...]] = {
+    "catalog.dish.set_status": ("dish",),
 }
 
 
 def family_authz(operation: str) -> dict[str, Any]:
     """`x-authz` di una rotta di famiglia, ricavato dalla riga della matrice (KeyError se manca)."""
     allowed = OPERATIONS[operation]
-    return {"scope": "family", "roles": [r for r in _ROLE_ORDER if r in allowed]}
+    authz: dict[str, Any] = {"scope": "family", "roles": [r for r in _ROLE_ORDER if r in allowed]}
+    if operation in TRACKS:
+        authz["tracks"] = list(TRACKS[operation])
+    return authz

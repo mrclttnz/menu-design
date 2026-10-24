@@ -1,6 +1,17 @@
 # Modello dei dati: Menu Design
 
-> Documento di proprietà del data-architect. Versione 9, 2026-10-23. **Stato: APPROVATO al gate G3** (2026-10-19, versione 4). La versione 5 contiene le correzioni per il gate G4, da approvare con il piano. La versione 6 contiene le correzioni emerse dalla prima esecuzione reale del DDL (SL-02). La versione 7 contiene quelle di SL-03a (migrazione `0005`). La versione 8 quelle di SL-03b (migrazione `0006`).
+> Documento di proprietà del data-architect. Versione 10, 2026-10-23. **Stato: APPROVATO al gate G3** (2026-10-19, versione 4). La versione 5 contiene le correzioni per il gate G4, da approvare con il piano. La versione 6 contiene le correzioni emerse dalla prima esecuzione reale del DDL (SL-02). La versione 7 contiene quelle di SL-03a (migrazione `0005`). La versione 8 quelle di SL-03b (migrazione `0006`). La versione 9 quelle di SL-04 (migrazione `0007`).
+>
+> **Novità della versione 10** (2026-10-23, SL-05: migrazione `0008` eseguita su PostgreSQL 17, con `upgrade`, `downgrade -1` e `base ↔ head`):
+> - **`change_event`** come nella sezione 4.2: RLS `p_family_select`/`p_family_insert` (nessuna `FOR ALL`), `p_owner`, `p_backup`; `menu_app` solo `SELECT` e `INSERT`; `tg_change_event_immutable`; i due indici della sezione 5.
+> - **Vincoli in più rispetto alla v9:** `ck_change_event_actor_role_person` (ruolo presente se e solo se `actor_kind='person'`, FR-061); `ck_change_event_meal_type` e `ck_change_event_meal_slot` con i domini di `meal`; `ck_change_event_payload_shape` (`before`/`after` oggetti JSON, `after` con `v` numerico, `before` senza `v`).
+> - **Limite dei payload a 20.480 byte** (decisione dell'utente, 2026-10-23; prima 4.096): 4.096 byte non bastavano per un `meal_content` valido nel caso peggiore (10 voci libere di 200 caratteri tolte e 10 aggiunte: 5.656 byte in ASCII, 17.656 con caratteri di 4 byte, misurati su PostgreSQL 17; il `CHECK` vede la dimensione non compressa). L'abuso resta limitato dalle 5.000 scritture tracciate al giorno per famiglia.
+> - **`after` NOT NULL** (decisione dell'utente, 2026-10-23): ogni evento porta la versione `v` e resta decodificabile (AC-028.5).
+> - **Correzione:** la somma usa `coalesce(pg_column_size(before), 0)`. Senza, con `before` NULL la somma è NULL e il `CHECK` passa per qualunque `after`.
+> - **Ciclo di correzione 1 di SL-05** (2026-10-24, CR-SL05-003 e CR-SL05-004; solo documento, il DDL non cambia):
+>   - la sezione 4.2 descrive il codec reale: `menu.history.codec`, con validazione scritta a mano e le fixture dorate `tests/fixtures/codec_v1/` come contratto congelato. Non usa `history/event_format.py` né modelli Pydantic;
+>   - la sezione 4.2 elenca le regole permanenti del v1, con le decisioni dell'utente, e riporta la **firma del data-architect** sul formato;
+>   - la nota sui `CHECK` di chiave di `change_event` è nella sezione 12, per la prossima migrazione.
 >
 > **Novità della versione 9** (2026-10-23, SL-04: migrazione `0007` eseguita su PostgreSQL 17, con `upgrade`, `downgrade -1` e `base ↔ head`):
 > - **`dish`, `dish_course`, `dish_source`** come nella sezione 4.2, senza le colonne di M2. `dish.name` ha `ck_dish_name` (non vuoto, non solo spazi), `dish_source.reference` un `CHECK` di non vuoto.
@@ -833,20 +844,84 @@ La validità rispetto all'ingresso (`meal_date >= joined_on`, AC-021.8) la contr
 | occurred_at | timestamptz | no | `app.now_utc()` | | UTC. Tutti gli eventi di una transazione condividono l'istante. |
 | actor_kind | text | no | | CK in (`person`, `platform_operator`, `system`) | `platform_operator` per FR-064 |
 | actor_person_id | uuid | sì | | CK `(actor_kind='person') = (actor_person_id IS NOT NULL)`. Nessuna FK (riga di sola aggiunta). Il riferimento si risolve verso `person`, compresi i tombstone. | Autore come persona, non come account: decisione dell'utente del 2026-10-18, incorporata in ADR-0012 (rev. 3, "Autore come persona"). Con la persona, "ex membro" e "utente eliminato" si risolvono senza dati dell'account (SR-047, AC-016.2) |
-| actor_role | text | sì | | CK in (`admin`, `planner`, `member`) | Ruolo in quel momento (FR-061) |
+| actor_role | text | sì | | CK in (`admin`, `planner`, `member`). CK `(actor_kind='person') = (actor_role IS NOT NULL)` | Ruolo in quel momento (FR-061) |
 | unit_type | text | no | | CK in (`meal_content`, `meal_guests`, `attendance`, `typical_week`, `dish`, `membership`) | |
 | op | text | no | | CK in (`set`, `clear`, `move`, `swap`, `copy`, `status_change`, `archive`, `restore`, `role_change`) | |
 | meal_date | date | sì | | | Chiave delle unità del pasto e della presenza |
-| meal_type | text | sì | | | |
-| meal_slot | smallint | sì | | | Occorrenza del pasto. È 0 per tutti i tipi tranne `other`. |
+| meal_type | text | sì | | CK in (`breakfast`, `lunch`, `snack`, `dinner`, `other`) | |
+| meal_slot | smallint | sì | | CK come `meal.meal_slot` (o NULL) | Occorrenza del pasto. È 0 per tutti i tipi tranne `other`. |
 | subject_person_id | uuid | sì | | | Presenza, settimana tipo, ruolo |
 | dish_id | uuid | sì | | | Unità piatto. Nessuna FK: un piatto mai pianificato può essere cancellato e appare come "piatto eliminato". |
 | before | jsonb | sì | | | **Formato compatto (da M0):** solo gli elementi cambiati, chiavi brevi, soli ID per persone, piatti e portate (SR-047) |
-| after | jsonb | sì | | CK `pg_column_size(before) + pg_column_size(after) <= 4096` | |
+| after | jsonb | no | | CK `coalesce(pg_column_size(before), 0) + pg_column_size(after) <= 20480` (caso peggiore valido: 17.656 byte, v10). CK di forma: `before` e `after` oggetti JSON, `after` con `v` numerico, `before` senza `v` | Sempre presente: porta la versione del formato (AC-028.5) |
 | correlation_id | uuid | sì | | | |
 
-**Formato compatto di `before` e `after`** (decisione dell'utente, 2026-10-18). È un contratto versionato con la chiave `"v":1` in `after`, e lo valida un modello Pydantic per `unit_type`.
-- Le chiavi sono brevi e documentate in un'unica tabella nel codice (`history/event_format.py`).
+**Formato compatto di `before` e `after`: codec v1** (decisione dell'utente, 2026-10-18). È un contratto versionato con la chiave `"v":1` in `after`, ed è **permanente** (AC-028.5): gli eventi di M0 si leggono per sempre, e la tabella è immutabile, quindi non si riscrivono.
+- **Unica fonte di verità:** il modulo `menu.history.codec` (`backend/src/menu/history/codec.py`). Contiene:
+  - `CODEC_VERSION = 1`;
+  - `KEYS`: le chiavi brevi ammesse per ogni `unit_type`;
+  - `OPERATIONS`: gli `op` ammessi per ogni `unit_type`;
+  - le funzioni pure `validate`, `diff`, `apply`, `revert`.
+
+  Non esiste una seconda definizione delle chiavi: chi decodifica (SL-22) importa da qui. Le versioni 2-10 di questo documento e ADR-0012 nominavano un modulo `history/event_format.py` e modelli Pydantic per `unit_type`: **non esistono**.
+- **Validazione scritta a mano, non con Pydantic.** `history.record.record_change` chiama `codec.validate(unit_type, op, before, after)` prima dell'`INSERT`. Un payload non conforme solleva `CodecError` (sottoclasse di `ValueError`) e la transazione della modifica fallisce. Il data-architect accetta la scelta: le regole che contano (ordinamento, assenza di duplicati, stessi campi nelle due parti, voce completa quando è aggiunta o tolta) sono controlli fra campi e fra le due parti. In un validatore esplicito si leggono meglio che in validatori di modello. I `CHECK` del database (forma e dimensione) sono la seconda linea.
+- **Contratto congelato:** le fixture dorate in `backend/tests/fixtures/codec_v1/*.json`, almeno una per tipo di unità: `attendance_set`, `dish_archive`, `dish_status_change`, `meal_content_add_item`, `meal_content_modify_and_remove`, `meal_content_presence_and_special_state`, `meal_guests_set`, `membership_role_change`, `typical_week_set`.
+  - Ogni fixture porta `unit_type`, `op`, `before`, `after`, `state_before` e `state_after`.
+  - `tests/unit/test_history_codec.py` verifica che restino valide, che `apply` e `revert` diano gli stati attesi, e che non contengano nomi né email.
+  - **Le fixture esistenti non si modificano né si cancellano mai.** Un cambio che ne rompe una è un formato nuovo (`v: 2`).
+  - Altri test: `tests/unit/test_history_codec_extra.py` e, con Hypothesis, `tests/property/test_history_codec_props.py`. Verificano che `diff` produca payload validi, che `apply` e `revert` siano inversi, che il payload resti uguale dopo un passaggio in JSON, e la ricostruzione a ritroso di uno stato passato.
+
+**Regole permanenti del v1** (come le implementa `codec.validate`):
+1. **Versione e forma.** `after` è sempre un oggetto con `"v": 1`, un intero e non un booleano (`after NOT NULL`, decisione dell'utente del 2026-10-23). `before` è `null` oppure un oggetto non vuoto, e non contiene mai `v`.
+2. **Chiavi e operazioni.** Sono ammesse solo le chiavi di `KEYS[unit_type]` e gli `op` di `OPERATIONS[unit_type]`:
+   - `meal_content`: `set`, `clear`, `move`, `swap`, `copy`;
+   - `meal_guests`, `attendance`, `typical_week`: `set`, `clear`;
+   - `dish`: `status_change`, `archive`, `restore`;
+   - `membership`: `role_change`.
+3. **Unità a valore singolo** (`dish`, `meal_guests`, `attendance`, `membership`). `before` c'è sempre, con esattamente le chiavi di `after` meno `v`, così ogni evento si annulla.
+   - **Stesso valore ammesso** (decisione dell'utente, 2026-10-23). Una richiesta con lo stato uguale a quello attuale incrementa la versione e scrive un evento con `before` uguale ad `after`, per esempio `{"st":"tested"}` → `{"v":1,"st":"tested"}`.
+   - `codec.diff` invece rifiuta uno stato invariato, quindi questo payload lo costruisce il servizio dei piatti.
+   - Chi legge (KPI-5, cronologia) conta un piatto "diventato collaudato" **solo se `before.st <> after.st`** (CR-SL05-008).
+   - Cambiare lo stato di un piatto archiviato è ammesso (decisione dell'utente, 2026-10-23): l'evento è un normale `status_change`.
+4. **`typical_week`.** `a` è una lista non vuota di celle `[iso_dow, tipo]`:
+   - `iso_dow` è un intero da 1 a 7, e il tipo non è mai `other` (ASM-032);
+   - le celle sono ordinate per giorno e poi per codice come stringa, senza duplicati;
+   - le celle aggiunte stanno in `after`, quelle tolte in `before`;
+   - nessuna cella sta in entrambe le parti, e almeno una parte ha celle.
+5. **`meal_content`.** `i` è una lista non vuota, ordinata per `id` della voce, senza duplicati.
+   - L'`id` è un UUID in forma canonica minuscola, e l'ordinamento lo confronta come stringa.
+   - Una voce **solo in `after` è aggiunta**, una voce **solo in `before` è tolta**. In entrambi i casi è completa (con `p`) e i campi nulli sono omessi. È un piatto (`d` e `c`) oppure un testo libero (`t`), mai entrambi.
+   - Una voce **in entrambe le parti è modificata**. Le due parti hanno gli stessi campi, e ognuno è davvero cambiato. Un campo assente significa "invariato", e il passaggio a nullo si scrive `null`.
+   - `s`, `pr` e `nm` sono scalari: quando cambiano, si scrivono in entrambe le parti. `pr` è il codice di presenza, mai un booleano.
+   - Ogni evento contiene almeno un cambiamento.
+6. **Domini dei valori:**
+   - `st` in (`to_try`, `tested`); `ar` booleano; `r` in (`admin`, `planner`, `member`);
+   - `p` di `attendance`: `true`, `false` o `null`;
+   - `g` intero ≥ 0;
+   - `gn` e `t`: testo da 1 a 200 caratteri, senza NUL; `nm`: da 1 a 40 caratteri;
+   - `s`: `away`, `restaurant`, `skipped` o `null`; `pr`: `inherit`, `added`, `removed`;
+   - voce: `p` intero ≥ 0, `n` booleano, `d` e `c` UUID.
+
+   I limiti superiori stretti (`p` ≤ 9, `g` ≤ 50) li garantiscono i `CHECK` delle tabelle sorgente, non il codec.
+7. **Dati personali.** Nessun nome né email: solo identificativi, codici e i testi liberi del pasto (SR-047). `before` e `after` non vanno mai nei log.
+8. **Un evento, una unità.** Un evento descrive una sola unità, quella identificata dalle colonne chiave. Il v1 non ha chiavi che rimandano a un'altra unità. Le operazioni su più unità (`move`, `swap`, `copy` in SL-06a) scrivono un evento per unità, nella stessa transazione e con lo stesso `correlation_id` non nullo. La cronologia li accoppia così.
+
+**Evoluzione del formato:**
+- **Ammesso dentro il v1**, aggiornando `codec.py` e **aggiungendo** fixture:
+  - allargare un dominio di valori, per esempio un codice nuovo, o un limite di lunghezza più alto se la tabella sorgente lo alza;
+  - rendere `validate` più severo su combinazioni che non sono mai state scritte (vedi la firma più sotto).
+- **Serve `v: 2`** per rinominare o togliere una chiave o un codice, o per cambiare il significato, l'ordinamento o la regola delle due parti. La versione nuova si aggiunge accanto, e il decodificatore gestisce tutte le versioni.
+
+**Firma del data-architect sul codec v1** (2026-10-24, SL-05, ciclo di correzione 1): **APPROVATO** così com'è implementato in `codec.py`, con le fixture di `tests/fixtures/codec_v1/` come contratto congelato. Seguono note che non bloccano la slice e non cambiano il formato:
+- **Coerenza fra `op` e chiavi** (backlog, **da fare prima di SL-08**, il primo slice che scrive `archive` e `restore`). Oggi `validate` non lega l'`op` alle chiavi: accetterebbe un `archive` che porta `st`. La regola da aggiungere è la seguente.
+  - `dish`: `status_change` porta solo `st`; `archive` porta solo `ar`, da `false` a `true`; `restore` porta solo `ar`, da `true` a `false`.
+  - `membership`: `role_change` porta `r`.
+
+  È un irrigidimento compatibile: finora esistono solo eventi `status_change` con `st`, e la fixture `dish_archive` lo rispetta già.
+- **Chiave dell'evento:** i vincoli da completare sono in CR-SL05-004 (vedi i `CHECK` sulla chiave più sotto e la sezione 12).
+- **Più unità in una operazione:** la regola 8 vale da SL-06a. Un test di SL-06a deve verificare un solo `correlation_id`, non nullo, per gli eventi di `move`, `swap` e `copy`.
+
+Riassunto delle chiavi:
 - Compaiono **solo gli elementi e i campi cambiati**:
   - un elemento aggiunto compare solo in `after`;
   - un elemento tolto compare solo in `before`;
@@ -854,10 +929,10 @@ La validità rispetto all'ingresso (`meal_date >= joined_on`, AC-021.8) la contr
 
 | `unit_type` | Chiavi |
 |---|---|
-| `meal_content` | `i`: voci, ognuna `{"id", "p": posizione, "d": dish_id, "c": course_id, "t": voce libera, "n": non cucinato}`. `s`: stato speciale. `pr`: presenza del pasto. `nm`: nome dell'"Altro pasto". |
+| `meal_content` | `i`: voci, ognuna `{"id", "p": posizione, "d": dish_id, "c": course_id, "t": voce libera, "n": non cucinato}`. `s`: stato speciale, codice di `meal.special_kind` (`away`, `restaurant`, `skipped`) o `null`. `pr`: presenza del pasto, codice di `meal.presence` (`inherit`, `added`, `removed`), mai un booleano. `nm`: nome dell'"Altro pasto". Le voci di `i` sono ordinate per `id`. |
 | `meal_guests` | `g`: numero. `gn`: nota. |
 | `attendance` | `p`: `true`, `false` o `null`. |
-| `typical_week` | `a`: celle assenti aggiunte (in `after`) o tolte (in `before`), come `[iso_dow, "codice del tipo di pasto"]`. |
+| `typical_week` | `a`: celle assenti aggiunte (in `after`) o tolte (in `before`), come `[iso_dow, "codice del tipo di pasto"]`, ordinate per giorno e poi per codice come stringa (`breakfast` < `dinner` < `lunch` < `snack`): è un ordine di serializzazione, non quello di visualizzazione. |
 | `dish` | `st`: stato. `ar`: archiviato (booleano). |
 | `membership` | `r`: ruolo. |
 
@@ -874,6 +949,11 @@ CK sulla chiave per tipo di unità:
 - `attendance` richiede in più `subject_person_id`;
 - `typical_week` e `membership` richiedono `subject_person_id`;
 - `dish` richiede `dish_id`.
+
+**Lacune note di questi `CHECK`** (CR-SL05-004, backlog, da correggere nella prossima migrazione che tocca `change_event`, sezione 12). Nessuna delle due è raggiungibile dal codice di SL-05, perché l'unico chiamante passa `EventKey(dish_id=…)`.
+- `ck_change_event_meal_slot` passa con `meal_type IS NULL` e `meal_slot` non nullo: entrambi i rami valgono NULL.
+- `ck_change_event_key` richiede le colonne chiave del tipo di unità, ma non vieta le altre. Un evento `dish` con `meal_date` valorizzata sarebbe accettato, e comparirebbe in `ix_change_event_family_day` e nella cronologia del giorno (Q7).
+- Anche `record_change` accetta qualunque `EventKey`. Il controllo applicativo corrispondente, cioè l'elenco dei campi ammessi per ogni unità con `ValueError` altrimenti, va aggiunto in SL-06a, prima dei nuovi chiamanti.
 
 Immutabilità:
 - `menu_app` ha solo `SELECT` e `INSERT`;
@@ -1394,8 +1474,19 @@ Sono invece `LANGUAGE plpgsql`, quindi sempre contate: `ensure_frozen`, le funzi
   | `0005` | `account`, FK `fk_person_account_id_account` (RESTRICT), `session` con `ix_session_account_id` e RLS per account (`p_session_self`, `p_session_expired_select`, `p_session_expired_delete`, `p_owner`, `p_backup`), `auth_flow` (`login`, `reauth`, con l'esito del callback), `session_resolve`, `bootstrap_resolve`; grant a `menu_app` (DML) e `menu_backup` (`SELECT`) | SL-03a | eseguita |
   | `0006` | `rate_counter` (PK `key`, `window_start`; CK chiave di 32 byte e `count >= 1`; tabella normale, senza RLS), `ix_rate_counter_window_start`; grant a `menu_app` (DML) e `menu_backup` (`SELECT`), nessuno a `menu_console`. `rate_block` rinviata (CHG-020) | SL-03b | eseguita |
   | `0007` | `dish` (senza `priority` e `promotion_dismissed_on`), `dish_course`, `dish_source`; CK di dominio, `ck_dish_archived_requires_planned`, trigger `tg_dish_ever_planned_monotonic`; FK composite e FK dirette verso `family`; `ix_dish_family_name`, `ix_dish_course_course`; RLS standard (`p_family`, `p_owner`, `p_backup`), DML a `menu_app`, `SELECT` a `menu_backup`, nulla a `menu_console`; nessuna funzione `SECURITY DEFINER` | SL-04 | eseguita |
-  | `0008` … | Ordine 8 e seguenti del piano: eventi, piano, M1 e M2 | | da scrivere |
+  | `0008` | `change_event`; CK di dominio, di chiave per tipo di unità, di forma e dimensione dei payload; trigger `tg_change_event_immutable`; FK solo verso `family` (CASCADE); `ix_change_event_family_time`, `ix_change_event_family_day`; RLS `p_family_select`/`p_family_insert`, `p_owner`, `p_backup`; `SELECT`/`INSERT` a `menu_app`, `SELECT` a `menu_backup`, nulla a `menu_console`; nessuna funzione `SECURITY DEFINER` | SL-05 | eseguita |
+  | `0009` … | Ordine 9 e seguenti del piano: piano, M1 e M2. **La prima che tocca `change_event` include la correzione di CR-SL05-004** (nota più sotto) | | da scrivere |
   | *rinviata* | Solo se FR-002 viene ripreso (CHG-020): `password_credential`, `account_token`, `rate_block`, modifiche ad `account` della sezione 4.3 | | dopo M2 |
+
+  **Nota per la prossima migrazione: `CHECK` di `change_event` (CR-SL05-004, backlog).** Va nella prima revisione dopo `0008`, al più tardi in quella di SL-06a, che porta i primi chiamanti con chiave di pasto. È additiva e non cambia il formato del codec.
+  - **`ck_change_event_meal_slot`:** ridefinito come `meal_slot IS NULL OR (meal_type IS NOT NULL AND ((meal_type <> 'other' AND meal_slot = 0) OR (meal_type = 'other' AND meal_slot BETWEEN 0 AND 4)))`.
+  - **`ck_change_event_key`:** ridefinito con le colonne **esatte** per ogni tipo di unità. Le colonne chiave che non appartengono all'unità devono essere NULL:
+    - `meal_content` e `meal_guests`: `meal_date`, `meal_type`, `meal_slot` non nulli; `subject_person_id` e `dish_id` nulli;
+    - `attendance`: i tre campi del pasto e `subject_person_id` non nulli; `dish_id` nullo;
+    - `typical_week` e `membership`: `subject_person_id` non nullo; `meal_date`, `meal_type`, `meal_slot` e `dish_id` nulli;
+    - `dish`: `dish_id` non nullo; tutte le altre colonne chiave nulle.
+  - **Esecuzione:** in un unico `ALTER TABLE app.change_event`, `DROP CONSTRAINT` e `ADD CONSTRAINT … NOT VALID` con lo stesso nome; poi `VALIDATE CONSTRAINT` (sezione 12, "Vincoli su tabelle grandi"). Le righe di `0008` (solo `dish` con il solo `dish_id`) li rispettano già. Il `downgrade` ripristina le definizioni di `0008`.
+  - **Test:** in `tests/db/test_change_event_schema.py::test_check_constraints_refuse_malformed_events` si aggiungono i casi `meal_type NULL` con `meal_slot 3`, e `dish` con `meal_date` o `subject_person_id`. Un test unitario copre `record_change` con una chiave che non corrisponde all'unità.
 
   Il `CONNECTION LIMIT` e la revoca di `CREATE` sugli schemi stanno in `db/bootstrap.sql`, perché riguardano ruoli e schemi creati fuori da Alembic. Il test d'inventario li verifica a ogni esecuzione della CI.
 

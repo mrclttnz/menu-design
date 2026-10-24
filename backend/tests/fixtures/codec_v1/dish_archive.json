@@ -1,0 +1,20 @@
+{
+  "name": "dish_archive",
+  "unit_type": "dish",
+  "op": "archive",
+  "before": {
+    "ar": false
+  },
+  "after": {
+    "v": 1,
+    "ar": true
+  },
+  "state_before": {
+    "st": "tested",
+    "ar": false
+  },
+  "state_after": {
+    "st": "tested",
+    "ar": true
+  }
+}

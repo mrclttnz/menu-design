@@ -1,6 +1,13 @@
 # Impostazioni di pnpm 12: qui, non in .npmrc (SR-076, THR-090).
-# Cooldown di 7 giorni (10080 minuti) su ogni versione nuova, senza eccezioni.
+# Cooldown di 7 giorni (10080 minuti) su ogni versione nuova.
 minimumReleaseAge: 10080
+# ECCEZIONE STRETTA e DATATA al cooldown, solo happy-dom@21.0.4 (decisione utente, 2026-10-24):
+# GHSA-834v-8h66-3h79 (CVSS 8.8) colpisce happy-dom 21.0.1; la fix 21.0.4 e' del 2026-10-20 e
+# passa il cooldown il 2026-10-27. Solo devDependency (DOM dei test unitari). Rimuovere queste
+# due righe entro il 2026-10-30: dal 2026-10-27 il cooldown generale include la versione da solo.
+# Un test (tests/unit/supply-chain.test.ts) fallisce dopo il 2026-10-30 se l'eccezione resta.
+minimumReleaseAgeExclude:
+  - happy-dom@21.0.4
 # Script di installazione bloccati; ammessi solo per i pacchetti che ne hanno bisogno.
 onlyBuiltDependencies:
   - esbuild

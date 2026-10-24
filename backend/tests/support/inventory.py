@@ -61,7 +61,8 @@ NON_FAMILY_TABLES = frozenset(
 ACCOUNT_RLS_TABLES = frozenset({"session", "export_file"})
 # SL-02: tabelle di famiglia create da questa slice (05-data §4.2: `family` filtra su `id`,
 # le altre su `family_id`); ogni slice successiva estende questi elenchi.
-# SL-04 aggiunge `dish`, `dish_course`, `dish_source` (migrazione 0007).
+# SL-04 aggiunge `dish`, `dish_course`, `dish_source` (migrazione 0007); SL-05 `change_event`
+# (migrazione 0008, di sola aggiunta: vedi APPEND_ONLY_FAMILY_TABLES).
 EXPECTED_FAMILY_TABLES_NOW = frozenset(
     {
         "family",
@@ -72,8 +73,14 @@ EXPECTED_FAMILY_TABLES_NOW = frozenset(
         "dish",
         "dish_course",
         "dish_source",
+        "change_event",
     }
 )
+# Tabelle di famiglia di sola aggiunta: `menu_app` ha solo SELECT e INSERT (policy
+# `p_family_select`/`p_family_insert`, trigger d'immutabilità). Il test d'isolamento generico
+# prova UPDATE/DELETE, che qui sono negati dai privilegi: li copre
+# `tests/db/test_change_event_schema.py`.
+APPEND_ONLY_FAMILY_TABLES = frozenset({"change_event"})
 # Tabelle non di famiglia presenti alla fine di SL-03b (05-data §6.3): `security_event` (SL-02),
 # `account`, `session` (RLS per account) e `auth_flow` (SL-03a), `rate_counter` (SL-03b).
 EXPECTED_OTHER_TABLES_NOW = frozenset(
@@ -317,8 +324,10 @@ def _standard_policy_problems(name: str, info: dict[str, Any], *, family: bool) 
             if pol is not None and pol["check"] is None:
                 problems.append(f"{name}: {pname} senza WITH CHECK")
         for pname, pol in pols.items():
-            if pname.startswith("p_family") and pol["using"] in (None, "true"):
-                problems.append(f"{name}: {pname} non filtra per famiglia ({pol['using']})")
+            # Una policy FOR INSERT (cmd 'a') ha solo WITH CHECK: PostgreSQL vieta USING.
+            expr = pol["check"] if pol["cmd"] == "a" else pol["using"]
+            if pname.startswith("p_family") and expr in (None, "true"):
+                problems.append(f"{name}: {pname} non filtra per famiglia ({expr})")
             if pname.startswith("p_family") and pol["roles"] != {APP_ROLE}:
                 problems.append(f"{name}: {pname} deve valere solo per {APP_ROLE}")
     return problems

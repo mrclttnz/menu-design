@@ -108,7 +108,8 @@ def test_m1_and_m2_tables_do_not_exist_yet(catalog: psycopg.Connection) -> None:
         ).fetchall()
     }
     assert {"dish", "dish_course", "dish_source"} <= present
-    assert not present & {"dish_tag", "dish_like", "tag", "change_event", "meal", "meal_item"}
+    # `change_event` è arrivata con SL-05 (migrazione 0008): vedi `test_change_event_schema.py`.
+    assert not present & {"dish_tag", "dish_like", "tag", "meal", "meal_item"}
 
 
 def test_dish_primary_and_unique_keys(catalog: psycopg.Connection) -> None:

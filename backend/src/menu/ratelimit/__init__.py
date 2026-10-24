@@ -15,6 +15,12 @@ from menu.ratelimit.rules import (
     Rule,
 )
 from menu.ratelimit.store import Hit, Verdict, hit
+from menu.ratelimit.tracked import (
+    TrackedCapExceeded,
+    configure_tracked_writes,
+    consume_tracked_write,
+    tracked_write,
+)
 
 __all__ = [
     "API_SESSION",
@@ -27,6 +33,10 @@ __all__ = [
     "Rule",
     "Session",
     "SessionIdentifier",
+    "TrackedCapExceeded",
     "Verdict",
+    "configure_tracked_writes",
+    "consume_tracked_write",
     "hit",
+    "tracked_write",
 ]

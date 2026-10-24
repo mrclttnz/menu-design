@@ -234,9 +234,27 @@ def security_event_types(owner: Owner) -> list[str]:
 
 
 def change_events(owner: Owner) -> int:
-    """Eventi di modifica scritti (la tabella arriva con SL-05: prima non c'è nulla da contare)."""
+    """Eventi di modifica scritti (0 anche se la tabella non esiste: prima di SL-05)."""
     exists = owner.scalar("select to_regclass('app.change_event') is not null")
     return int(owner.scalar("select count(*) from app.change_event")) if exists else 0
+
+
+EVENT_COLUMNS = (
+    "id, family_id, occurred_at, actor_kind, actor_person_id, actor_role, unit_type, op, "
+    "meal_date, meal_type, meal_slot, subject_person_id, dish_id, before, after, correlation_id"
+)
+
+
+def event_rows(owner: Owner) -> list[dict[str, Any]]:
+    """Tutte le righe di `change_event` (via owner), in ordine di inserimento, come dizionari."""
+    rows = owner.rows(f"select {EVENT_COLUMNS} from app.change_event order by occurred_at, id")  # noqa: S608
+    keys = [c.strip() for c in EVENT_COLUMNS.split(",")]
+    return [dict(zip(keys, r, strict=True)) for r in rows]
+
+
+def event_text(owner: Owner) -> str:
+    """Tutto il contenuto di `change_event` come testo, per cercarvi nomi, email e canarini."""
+    return "\n".join(str(r[0]) for r in owner.rows("select t::text from app.change_event t"))
 
 
 # --- payload e risposte ---------------------------------------------------------------------------
@@ -348,6 +366,10 @@ def request_for(op_id: str, fam: Fam, dish: UUID | str | None = None, version: i
         "catalog.dish.read": Req("GET", f"/api/v1/dishes/{dish}"),
         "catalog.dish.update": Req(
             "PUT", f"/api/v1/dishes/{dish}", payload(fam, "Piatto modificato"), f'"{version}"'
+        ),
+        # SL-05: da «da provare» a «collaudato» (i piatti di `make_dish` partono da «da provare»).
+        "catalog.dish.set_status": Req(
+            "POST", f"/api/v1/dishes/{dish}/status", {"status": "tested"}, f'"{version}"'
         ),
     }
     assert op_id in builders, (

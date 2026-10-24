@@ -1,0 +1,26 @@
+{
+  "name": "meal_content_presence_and_special_state",
+  "unit_type": "meal_content",
+  "op": "set",
+  "before": {
+    "s": null,
+    "pr": "inherit"
+  },
+  "after": {
+    "v": 1,
+    "s": "away",
+    "pr": "removed"
+  },
+  "state_before": {
+    "i": {},
+    "s": null,
+    "pr": "inherit",
+    "nm": null
+  },
+  "state_after": {
+    "i": {},
+    "s": "away",
+    "pr": "removed",
+    "nm": null
+  }
+}

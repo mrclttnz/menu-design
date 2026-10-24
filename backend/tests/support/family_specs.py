@@ -138,3 +138,20 @@ FAMILY_TABLE_SPECS: dict[str, FamilyTableSpec] = {
         ),
     ),
 }
+
+
+# SL-05: `change_event` (sola aggiunta). Nessuna FK su `actor_person_id` e `dish_id`: gli
+# identificativi possono essere casuali. Il CK di forma per `dish` richiede `dish_id`.
+EVENT_INSERT = (
+    "insert into app.change_event (family_id, actor_kind, actor_person_id, actor_role, "
+    "unit_type, op, dish_id, before, after) "
+    "values (%s, 'person', %s, 'planner', 'dish', 'status_change', %s, "
+    """'{"st":"to_try"}'::jsonb, '{"v":1,"st":"tested"}'::jsonb)"""
+)
+
+
+def event_sql(family: UUID) -> tuple[str, tuple[Any, ...]]:
+    return EVENT_INSERT, (family, uuid4(), uuid4())
+
+
+FAMILY_TABLE_SPECS["change_event"] = FamilyTableSpec(seed=_seed(event_sql), insert_sql=event_sql)

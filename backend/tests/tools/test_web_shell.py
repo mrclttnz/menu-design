@@ -12,6 +12,7 @@ da correggere. Qui si prova l'impostazione efficace, non il nome del file.
 import json
 import re
 import subprocess
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -267,11 +268,27 @@ def test_install_scripts_are_blocked_except_esbuild_sr_076() -> None:
         assert hook not in pkg_scripts, f"hook `{hook}` nel progetto"
 
 
-def test_release_cooldown_is_at_least_seven_days_and_has_no_exceptions_sr_076() -> None:
+COOLDOWN_EXCEPTION = "happy-dom@21.0.4"  # unica eccezione ammessa (decisione utente 2026-10-24)
+COOLDOWN_EXCEPTION_UNTIL = date(2026, 10, 31)  # dal 31 ottobre l'eccezione deve essere tolta
+
+
+def test_release_cooldown_is_at_least_seven_days_with_one_dated_exception_sr_076() -> None:
     raw = _workspace_setting("minimumReleaseAge")
     assert raw is not None, "minimumReleaseAge non impostato in pnpm-workspace.yaml (SR-076)"
     assert int(raw) >= 10080, "pnpm usa i minuti: 7 giorni = 10080"
-    assert _workspace_list("minimumReleaseAgeExclude") == [], "nessuna eccezione al cooldown"
+    excluded = _workspace_list("minimumReleaseAgeExclude")
+    assert set(excluded) <= {COOLDOWN_EXCEPTION}, f"eccezioni al cooldown non ammesse: {excluded}"
+    assert len(excluded) == len(set(excluded)), "voce duplicata"
+    if not excluded:
+        return
+    text = (WEB / "pnpm-workspace.yaml").read_text(encoding="utf-8")
+    comment = text.split("minimumReleaseAgeExclude:")[0].splitlines()[-8:]
+    block = "\n".join(line for line in comment if line.lstrip().startswith("#"))
+    assert COOLDOWN_EXCEPTION in block, "l'eccezione deve avere un commento che la motiva"
+    assert re.search(r"20\d\d-\d\d-\d\d", block), "il commento deve riportare la data"
+    assert datetime.now(UTC).date() < COOLDOWN_EXCEPTION_UNTIL, (
+        f"l'eccezione al cooldown per {COOLDOWN_EXCEPTION} è scaduta: va tolta"
+    )
 
 
 def test_npmrc_if_present_does_not_weaken_the_supply_chain() -> None:

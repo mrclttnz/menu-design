@@ -561,6 +561,162 @@
           ]
         }
       }
+    },
+    "/api/v1/dishes/{dishId}/status": {
+      "post": {
+        "summary": "Set Dish Status",
+        "operationId": "catalog.dish.set_status",
+        "parameters": [
+          {
+            "name": "dishId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Dishid"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ETag \"<n>\"",
+              "title": "If-Match"
+            },
+            "description": "ETag \"<n>\""
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatusChange"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Scheda aggiornata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DishDetail"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "description": "Versione della scheda, `\"<n>\"`",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Errore (RFC 9457, `code` di ADR-0010)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sessione assente o scaduta",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Ruolo senza permesso (Membro) o token CSRF non valido",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Piatto non trovato nella famiglia",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Versione superata: `params.current` è la scheda attuale",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Stato o `If-Match` non validi",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "`If-Match` assente",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Limite di frequenza (sessione, account) o tetto giornaliero di scritture tracciate della famiglia; `Retry-After` in secondi",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-authz": {
+          "scope": "family",
+          "roles": [
+            "admin",
+            "planner"
+          ],
+          "tracks": [
+            "dish"
+          ]
+        }
+      }
     }
   },
   "components": {
@@ -1483,6 +1639,25 @@
           "redirectUrl"
         ],
         "title": "StartResponse"
+      },
+      "StatusChange": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "to_try",
+              "tested"
+            ],
+            "title": "Status"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "StatusChange",
+        "description": "`POST /status`: solo il nuovo stato (la scheda si modifica con `PUT`)."
       },
       "ValidationCode": {
         "type": "string",

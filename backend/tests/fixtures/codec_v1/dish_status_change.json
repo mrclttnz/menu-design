@@ -1,0 +1,20 @@
+{
+  "name": "dish_status_change",
+  "unit_type": "dish",
+  "op": "status_change",
+  "before": {
+    "st": "to_try"
+  },
+  "after": {
+    "v": 1,
+    "st": "tested"
+  },
+  "state_before": {
+    "st": "to_try",
+    "ar": false
+  },
+  "state_after": {
+    "st": "tested",
+    "ar": false
+  }
+}

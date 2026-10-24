@@ -17,10 +17,11 @@ from uuid import UUID
 
 from sqlalchemy import text
 
-from menu import tenancy
+from menu import ratelimit, tenancy
 from menu.catalog.schemas import (
     Course,
     DishDetail,
+    DishStatus,
     DishSummary,
     DishUpdate,
     DishWrite,
@@ -28,6 +29,7 @@ from menu.catalog.schemas import (
     conflict_params,
 )
 from menu.common import AppError, ErrorCode, RequestContext
+from menu.history import EventKey, codec, record_change
 from menu.tenancy import Tx
 
 DISH_QUOTA = 2000
@@ -53,6 +55,14 @@ _INSERT_DISH = text(
 _LOCK_DISH = text(
     "select version, created_by, modified_by, modified_at from app.dish "
     "where id = :id and family_id = :family for update"
+)
+_LOCK_FOR_STATUS = text(
+    "select version, status, created_by, modified_by, modified_at from app.dish "
+    "where id = :id and family_id = :family for update"
+)
+_UPDATE_STATUS = text(
+    "update app.dish set status = :status, version = version + 1, modified_by = :person, "
+    "modified_at = app.now_utc() where id = :id and family_id = :family"
 )
 _UPDATE_DISH = text(
     "update app.dish set name = :name, notes = :notes, prep_time = :prep_time, "
@@ -308,6 +318,18 @@ def create_dish(ctx: RequestContext, body: DishWrite) -> DishDetail:
         return _load(tx, family, dish_id)
 
 
+def _conflict(tx: Tx, family: UUID, dish_id: UUID, current: Any) -> AppError:
+    """`412` con la scheda corrente, l'autore (ID) e l'istante dell'ultima modifica."""
+    return AppError(
+        ErrorCode.CONFLICT,
+        conflict_params(
+            _load(tx, family, dish_id),
+            current["modified_by"] or current["created_by"],
+            current["modified_at"],
+        ),
+    )
+
+
 def update_dish(
     ctx: RequestContext, dish_id: UUID, body: DishUpdate, expected_version: int
 ) -> DishDetail:
@@ -324,14 +346,7 @@ def update_dish(
         if current is None:
             raise MissingReference
         if current["version"] != expected_version:
-            raise AppError(
-                ErrorCode.CONFLICT,
-                conflict_params(
-                    _load(tx, family, dish_id),
-                    current["modified_by"] or current["created_by"],
-                    current["modified_at"],
-                ),
-            )
+            raise _conflict(tx, family, dish_id, current)
         _require_courses(tx, family, course_ids)
         tx.execute(
             _UPDATE_DISH,
@@ -347,4 +362,40 @@ def update_dish(
         tx.execute(_DELETE_COURSES, {"family": family, "id": dish_id})
         tx.execute(_DELETE_SOURCES, {"family": family, "id": dish_id})
         _write_parts(tx, family, dish_id, body, course_ids)
+        return _load(tx, family, dish_id)
+
+
+def set_status(
+    ctx: RequestContext, dish_id: UUID, status: DishStatus, expected_version: int
+) -> DishDetail:
+    """Cambia lo stato del piatto e registra l'evento nella stessa transazione (US-005).
+
+    Ordine: riga bloccata, `404` se non è della famiglia (anche con versione sbagliata), `412` se
+    la versione è superata, poi il tetto giornaliero della famiglia (`429`), la scrittura e
+    l'evento. Ogni richiesta valida avanza la versione e scrive un evento, anche se lo stato
+    richiesto è quello già presente (`before` e `after` coincidono): versione ed eventi crescono
+    insieme e di due richieste con lo stesso `If-Match` ne riesce una sola. Un piatto archiviato
+    si può cambiare come con `PUT`. Un errore in qualunque punto annulla tutto.
+    """
+    family = _family(ctx)
+    with ratelimit.tracked_write(ctx), tenancy.family_tx(ctx) as tx:
+        current = tx.execute(_LOCK_FOR_STATUS, {"id": dish_id, "family": family}).mappings().first()
+        if current is None:
+            raise MissingReference
+        if current["version"] != expected_version:
+            raise _conflict(tx, family, dish_id, current)
+        ratelimit.consume_tracked_write(tx, ctx)
+        tx.execute(
+            _UPDATE_STATUS,
+            {"status": status, "person": ctx.person_id, "id": dish_id, "family": family},
+        )
+        record_change(
+            tx,
+            ctx,
+            unit_type="dish",
+            op="status_change",
+            key=EventKey(dish_id=dish_id),
+            before={"st": current["status"]},
+            after={"v": codec.CODEC_VERSION, "st": status},
+        )
         return _load(tx, family, dish_id)

@@ -1,0 +1,54 @@
+{
+  "name": "typical_week_set",
+  "unit_type": "typical_week",
+  "op": "set",
+  "before": {
+    "a": [
+      [
+        2,
+        "dinner"
+      ]
+    ]
+  },
+  "after": {
+    "v": 1,
+    "a": [
+      [
+        1,
+        "lunch"
+      ],
+      [
+        5,
+        "dinner"
+      ]
+    ]
+  },
+  "state_before": {
+    "a": [
+      [
+        2,
+        "dinner"
+      ],
+      [
+        3,
+        "lunch"
+      ]
+    ]
+  },
+  "state_after": {
+    "a": [
+      [
+        1,
+        "lunch"
+      ],
+      [
+        3,
+        "lunch"
+      ],
+      [
+        5,
+        "dinner"
+      ]
+    ]
+  }
+}

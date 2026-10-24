@@ -145,6 +145,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/dishes/{dishId}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set Dish Status */
+        post: operations["catalog.dish.set_status"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -472,6 +489,17 @@ export interface components {
         StartResponse: {
             /** Redirecturl */
             redirectUrl: string;
+        };
+        /**
+         * StatusChange
+         * @description `POST /status`: solo il nuovo stato (la scheda si modifica con `PUT`).
+         */
+        StatusChange: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "to_try" | "tested";
         };
         /**
          * ValidationCode
@@ -805,6 +833,109 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DishDetail"];
+                };
+            };
+            /** @description Errore (RFC 9457, `code` di ADR-0010) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    "catalog.dish.set_status": {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag "<n>" */
+                "If-Match"?: string | null;
+            };
+            path: {
+                dishId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StatusChange"];
+            };
+        };
+        responses: {
+            /** @description Scheda aggiornata */
+            200: {
+                headers: {
+                    /** @description Versione della scheda, `"<n>"` */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DishDetail"];
+                };
+            };
+            /** @description Sessione assente o scaduta */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Ruolo senza permesso (Membro) o token CSRF non valido */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Piatto non trovato nella famiglia */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Versione superata: `params.current` è la scheda attuale */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Stato o `If-Match` non validi */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description `If-Match` assente */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Limite di frequenza (sessione, account) o tetto giornaliero di scritture tracciate della famiglia; `Retry-After` in secondi */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Errore (RFC 9457, `code` di ADR-0010) */

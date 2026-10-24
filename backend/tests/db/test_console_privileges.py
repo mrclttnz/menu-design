@@ -8,7 +8,7 @@ from collections.abc import Callable
 import psycopg
 import pytest
 
-from support.inventory import EXPECTED_FAMILY_TABLES_NOW, app_tables
+from support.inventory import APPEND_ONLY_FAMILY_TABLES, EXPECTED_FAMILY_TABLES_NOW, app_tables
 
 Connect = Callable[..., psycopg.Connection]
 # `security_event.id` è GENERATED ALWAYS: l'UPDATE fallirebbe prima del controllo dei permessi.
@@ -70,7 +70,8 @@ def test_menu_console_has_no_privilege_on_any_table_or_sequence(
     assert seq == []
 
 
-@pytest.mark.parametrize("table", sorted(EXPECTED_FAMILY_TABLES_NOW))
+# `change_event` è di sola aggiunta (SELECT e INSERT): vedi test_change_event_schema.py.
+@pytest.mark.parametrize("table", sorted(EXPECTED_FAMILY_TABLES_NOW - APPEND_ONLY_FAMILY_TABLES))
 def test_menu_app_has_full_dml_on_family_tables(catalog: psycopg.Connection, table: str) -> None:
     """05-data §3.2: tabelle di famiglia sì/sì/sì/sì, sempre sotto RLS."""
     for priv in ("SELECT", "INSERT", "UPDATE", "DELETE"):
