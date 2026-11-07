@@ -9,7 +9,7 @@ from fastapi import APIRouter, FastAPI
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from menu import access, catalog, family, identity, ratelimit, tenancy, views
+from menu import access, catalog, family, identity, planning, ratelimit, tenancy, views
 from menu.app import health
 from menu.common import AppError
 from menu.platform import Settings, assert_all_routes_declare_authz, configure_logging
@@ -102,6 +102,8 @@ def create_app(
     app.include_router(identity.router)
     app.include_router(views.session_router)
     app.include_router(catalog.router)
+    app.include_router(planning.router)
+    app.include_router(views.plan_router)
     for router in extra_routers:
         app.include_router(router)
     assert_all_routes_declare_authz(app)

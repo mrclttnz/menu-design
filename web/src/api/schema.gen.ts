@@ -162,6 +162,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/meals/{date}/{mealType}/{slot}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Meal */
+        get: operations["meal.view.read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/meals/{date}/{mealType}/{slot}/presence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set Presence */
+        put: operations["meal.presence.write"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Plan */
+        get: operations["plan.view.read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -234,6 +285,23 @@ export interface components {
             /** Items */
             items: components["schemas"]["Course"][];
         };
+        /** CourseRef */
+        CourseRef: {
+            /** Basecode */
+            baseCode: ("starter" | "first" | "second" | "side" | "one_dish" | "dessert" | "drink" | "other") | null;
+            /** Name */
+            name: string | null;
+        };
+        /** DayView */
+        DayView: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Meals */
+            meals: components["schemas"]["MealView"][];
+        };
         /** DishDetail */
         DishDetail: {
             /**
@@ -274,6 +342,21 @@ export interface components {
             items: components["schemas"]["DishSummary"][];
             /** Nextcursor */
             nextCursor: string | null;
+        };
+        /**
+         * DishRef
+         * @description Riferimento a un piatto nelle viste composte (il piano): solo ciò che serve a mostrarlo.
+         */
+        DishRef: {
+            /** Name */
+            name: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "to_try" | "tested";
+            /** Archived */
+            archived: boolean;
         };
         /** DishSummary */
         DishSummary: {
@@ -391,6 +474,58 @@ export interface components {
          * @description Corpo `{}`.
          */
         LogoutRequest: Record<string, never>;
+        /** MealItemView */
+        MealItemView: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Position */
+            position: number;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "dish" | "free_text";
+            /** Dishid */
+            dishId?: string | null;
+            /** Courseid */
+            courseId?: string | null;
+            /** Freetext */
+            freeText?: string | null;
+            /** Notcooked */
+            notCooked: boolean;
+        };
+        /** MealView */
+        MealView: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /**
+             * Mealtype
+             * @enum {string}
+             */
+            mealType: "breakfast" | "lunch" | "snack" | "dinner" | "other";
+            /** Slot */
+            slot: number;
+            /** Name */
+            name: string | null;
+            /** Present */
+            present: boolean;
+            /** Special */
+            special: ("away" | "restaurant" | "skipped") | null;
+            /** Contentversion */
+            contentVersion: number;
+            /** Contentmodifiedby */
+            contentModifiedBy: string | null;
+            /** Items */
+            items: components["schemas"]["MealItemView"][];
+            /** Past */
+            past: boolean;
+        };
         /**
          * NoticeView
          * @description Avviso alla famiglia (SL-24). Sempre vuoto in SL-03a.
@@ -427,6 +562,54 @@ export interface components {
              * @enum {string}
              */
             role: "admin" | "planner" | "member";
+        };
+        /**
+         * PlanRefs
+         * @description Piatti e portate citati dalle voci del piano, per identificativo (nessun altro).
+         */
+        PlanRefs: {
+            /** Dishes */
+            dishes: {
+                [key: string]: components["schemas"]["DishRef"];
+            };
+            /** Courses */
+            courses: {
+                [key: string]: components["schemas"]["CourseRef"];
+            };
+        };
+        /**
+         * PlanView
+         * @description `GET /plan` (piano §4.2): giorni, pasti con voci, e i riferimenti per mostrarli.
+         */
+        PlanView: {
+            /**
+             * From
+             * Format: date
+             */
+            from: string;
+            /**
+             * To
+             * Format: date
+             */
+            to: string;
+            /**
+             * Today
+             * Format: date
+             */
+            today: string;
+            /** Timezone */
+            timezone: string;
+            /** Days */
+            days: components["schemas"]["DayView"][];
+            refs: components["schemas"]["PlanRefs"];
+        };
+        /**
+         * PresenceChange
+         * @description `PUT .../presence`: aggiungere (`true`) o togliere (`false`) il pasto di quel giorno.
+         */
+        PresenceChange: {
+            /** Present */
+            present: boolean;
         };
         /**
          * ProblemDetails
@@ -931,6 +1114,225 @@ export interface operations {
             };
             /** @description Limite di frequenza (sessione, account) o tetto giornaliero di scritture tracciate della famiglia; `Retry-After` in secondi */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Errore (RFC 9457, `code` di ADR-0010) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    "meal.view.read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                date: string;
+                mealType: "breakfast" | "lunch" | "snack" | "dinner" | "other";
+                slot: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Il pasto */
+            200: {
+                headers: {
+                    /** @description Versione del contenuto, `"<n>"` (`0` se mai scritto) */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MealView"];
+                };
+            };
+            /** @description Sessione assente o scaduta */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Slot non valido per il tipo di pasto */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Data o tipo di pasto non validi */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Errore (RFC 9457, `code` di ADR-0010) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    "meal.presence.write": {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag "<n>" */
+                "If-Match"?: string | null;
+            };
+            path: {
+                date: string;
+                mealType: "breakfast" | "lunch" | "snack" | "dinner" | "other";
+                slot: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PresenceChange"];
+            };
+        };
+        responses: {
+            /** @description Il pasto aggiornato */
+            200: {
+                headers: {
+                    /** @description Nuova versione del contenuto, `"<n>"` */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MealView"];
+                };
+            };
+            /** @description Sessione assente o scaduta */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Ruolo senza permesso (Membro) o token CSRF non valido */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Slot non valido per il tipo di pasto */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Versione superata: `params.current` è il pasto attuale */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Corpo, data, tipo di pasto o `If-Match` non validi */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description `If-Match` assente */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Limite di frequenza (sessione, account) o tetto giornaliero di scritture tracciate della famiglia; `Retry-After` in secondi */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Errore (RFC 9457, `code` di ADR-0010) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    "plan.view.read": {
+        parameters: {
+            query?: {
+                /** @description Primo giorno, `AAAA-MM-GG` (default: lunedì della settimana corrente) */
+                from?: string | null;
+                /** @description Ultimo giorno incluso, `AAAA-MM-GG` (default: domenica corrente) */
+                to?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Giorni dell'intervallo, ciascuno con i suoi pasti */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanView"];
+                };
+            };
+            /** @description Sessione assente o scaduta */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description `range_too_large` (`params.maxDays`: 62) oppure `validation` (`range_order`, `date_invalid`) */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

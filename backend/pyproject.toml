@@ -43,11 +43,6 @@ module-name = "menu"
 [tool.uv]
 # SR-076: cooldown di 7 giorni sulle nuove versioni (durata relativa, V-7).
 exclude-newer = "7 days"
-# ECCEZIONE STRETTA al cooldown, solo certifi (decisione utente, 2026-10-20):
-# GHSA-6q48-6c7w-9gw2 (CVSS 9.1) colpisce certifi 2026.7.22; la fix 2026.10.19
-# ha < 7 giorni. Rimuovere questa riga entro ~2026-10-27, quando la fix sara'
-# piu' vecchia di 7 giorni e il cooldown generale la includera' da solo.
-exclude-newer-package = { certifi = "2026-10-21T00:00:00Z" }
 default-groups = ["dev"]
 
 [tool.ruff]

@@ -9,8 +9,11 @@ from datetime import date, datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
+
+from menu.catalog import CourseRef, DishRef
+from menu.planning.schemas import MealView
 
 
 class View(BaseModel):
@@ -68,3 +71,26 @@ class AuthenticatedSession(View):
     privacy_review_required: bool
     notices: list[NoticeView]
     auth_outcome: AuthOutcomeView | None = None
+
+
+class DayView(View):
+    date: date
+    meals: list[MealView]
+
+
+class PlanRefs(View):
+    """Piatti e portate citati dalle voci del piano, per identificativo (nessun altro)."""
+
+    dishes: dict[UUID, DishRef]
+    courses: dict[UUID, CourseRef]
+
+
+class PlanView(View):
+    """`GET /plan` (piano §4.2): giorni, pasti con voci, e i riferimenti per mostrarli."""
+
+    from_: date = Field(alias="from")
+    to: date
+    today: date
+    timezone: str
+    days: list[DayView]
+    refs: PlanRefs

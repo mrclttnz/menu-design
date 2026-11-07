@@ -49,8 +49,8 @@ def test_lockfile_checked_in_lint() -> None:
 
 
 def _tool_exception(tool: str) -> str:
-    """INFO-14: l'eccezione ammessa è solo `$(TOOL_CERTIFI_EXCEPTION)` e solo su semgrep."""
-    return r'--exclude-newer-package "\$\(TOOL_CERTIFI_EXCEPTION\)" ' if tool == "semgrep" else ""
+    """INFO-14: nessuna eccezione al cooldown ammessa sugli strumenti."""
+    return ""
 
 
 def tool_lines_comply(mk: str) -> bool:
@@ -67,17 +67,16 @@ def tool_lines_comply(mk: str) -> bool:
 
 _SG = '"semgrep==$(SEMGREP_VERSION)"'
 _ZZ = '"zizmor==$(ZIZMOR_VERSION)"'
-_CERT = '--exclude-newer-package "$(TOOL_CERTIFI_EXCEPTION)" '
 _OTHER = '--exclude-newer-package "requests=2099-01-01T00:00:00Z" '
 _CERT_LITERAL = '--exclude-newer-package "certifi=2099-01-01T00:00:00Z" '
 
 
 @pytest.mark.parametrize(
     "mutation",
-    [(_SG, _OTHER + _SG), (_ZZ, _CERT + _ZZ), (_CERT, _CERT_LITERAL)],
-    ids=["other-package-on-semgrep", "certifi-exception-on-zizmor", "literal-instead-of-variable"],
+    [(_SG, _OTHER + _SG), (_ZZ, _CERT_LITERAL + _ZZ)],
+    ids=["other-package-on-semgrep", "certifi-exception-on-zizmor"],
 )
-def test_tool_cooldown_guard_rejects_exceptions_other_than_the_certifi_variable(
+def test_tool_cooldown_guard_rejects_any_cooldown_exception(
     mutation: tuple[str, str],
 ) -> None:
     """INFO-14: il controllo sa fallire (mutazioni sintetiche del Makefile)."""
@@ -88,16 +87,10 @@ def test_tool_cooldown_guard_rejects_exceptions_other_than_the_certifi_variable(
     assert not tool_lines_comply(mk.replace(old, new, 1))
 
 
-def test_backend_cooldown_exception_is_limited_to_certifi_and_dates_match() -> None:
-    """CR-SL00a-011 / INFO-14: solo certifi, e stessa data nel Makefile e in pyproject."""
-    import re
-
-    excl = _pyproject()["tool"]["uv"].get("exclude-newer-package", {})
-    assert set(excl) <= {"certifi"}
-    m = re.search(r"^TOOL_CERTIFI_EXCEPTION\s*:=\s*certifi=(\S+)$", _makefile(), re.M)
-    assert m
-    if excl:
-        assert excl["certifi"] == m.group(1)
+def test_backend_has_no_cooldown_exception() -> None:
+    """CR-SL00a-011: l'eccezione certifi è scaduta (2026-10-27) e va rimossa."""
+    assert not _pyproject()["tool"]["uv"].get("exclude-newer-package")
+    assert "TOOL_CERTIFI_EXCEPTION" not in _makefile()
 
 
 def test_precommit_hooks_use_frozen_uv_run() -> None:
@@ -177,17 +170,3 @@ def test_sast_runs_custom_rule_tests_and_path_check() -> None:
 def test_gitleaks_does_not_allowlist_env_example() -> None:
     cfg = (REPO / ".gitleaks.toml").read_text(encoding="utf-8")
     assert ".env" not in cfg
-
-
-def test_semgrep_install_pins_certifi_past_ghsa_6q48() -> None:
-    """SEC-SL00a-010: il cooldown non deve risolvere certifi 2026.7.22 (GHSA-6q48-6c7w-9gw2)."""
-    import re
-
-    mk = _makefile()
-    m = re.search(r"^TOOL_CERTIFI_EXCEPTION\s*:=\s*certifi=(\d{4}-\d{2}-\d{2})T", mk, re.M)
-    assert m
-    # certifi 2026.10.19 (fix) è stato caricato il 2026-10-20: con una data precedente
-    # uv risolve ancora la 2026.10.18 vulnerabile.
-    assert m.group(1) >= "2026-10-21"
-    line = next(ln for ln in mk.splitlines() if "tool install" in ln and "semgrep==" in ln)
-    assert '--exclude-newer-package "$(TOOL_CERTIFI_EXCEPTION)"' in line

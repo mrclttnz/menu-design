@@ -125,6 +125,43 @@ operations:
     unsafe: true
     tracks: [dish]
 
+  # SL-06a (piano §4.3). Nomi PROPOSTI dal tester (vedi rapporto, N-1): `area.risorsa.azione`.
+  # Il pasto si indirizza per (data, tipo, slot) e la famiglia viene sempre dalla sessione: nessun
+  # identificativo di risorsa nel percorso, quindi nessun test `cross_family` (vedi rapporto, N-2);
+  # l'isolamento è in tests/security/test_meals_isolation.py.
+  plan.view.read:
+    method: get
+    path: /api/v1/plan
+    scope: family
+    roles: [admin, planner, member]
+    rules: []
+    anonymous: 401
+    cells: {admin: allow, planner: allow, member: allow}
+    cross_family: none
+    unsafe: false
+  meal.view.read:
+    method: get
+    path: /api/v1/meals/{date}/{mealType}/{slot}
+    scope: family
+    roles: [admin, planner, member]
+    rules: []
+    anonymous: 401
+    cells: {admin: allow, planner: allow, member: allow}
+    cross_family: none
+    unsafe: false
+  # `{present}` + `If-Match`; A e P; il Membro riceve 403. `tracks`: T(meal_content).
+  meal.presence.write:
+    method: put
+    path: /api/v1/meals/{date}/{mealType}/{slot}/presence
+    scope: family
+    roles: [admin, planner]
+    rules: []
+    anonymous: 401
+    cells: {admin: allow, planner: allow, member: 403}
+    cross_family: none
+    unsafe: true
+    tracks: [meal_content]
+
 # Operazioni di slice successive, nomi PROPOSTI dal tester (vedi report: NEEDS_DECISION sui nomi).
 # Solo i permessi che non richiedono fatti sulla risorsa (06-requisiti "Archivio piatti").
 future:

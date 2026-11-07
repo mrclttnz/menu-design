@@ -90,12 +90,12 @@ def _app_tables(conn: psycopg.Connection) -> set[str]:
 
 
 def _all_inventories(conn: psycopg.Connection, *, state: str) -> None:
-    """`state`: "head" (0008), "previous" (0007, dopo `downgrade -1`), "base" (nessuna)."""
+    """`state`: "head" (0009), "previous" (0008, dopo `downgrade -1`), "base" (nessuna)."""
     assert bare_time_problems(conn) == []
     assert rls_problems(conn) == []
     expected_secdef = {
         "head": EXPECTED_SECDEF_NOW,
-        "previous": EXPECTED_SECDEF_NOW,  # 0007 e 0008 non aggiungono funzioni SECURITY DEFINER
+        "previous": EXPECTED_SECDEF_NOW,  # 0007, 0008 e 0009 non aggiungono SECURITY DEFINER
         "base": frozenset(),
     }[state]
     assert secdef_problems(conn, expected_secdef) == []
@@ -107,13 +107,32 @@ def _all_inventories(conn: psycopg.Connection, *, state: str) -> None:
     }
     tables = _app_tables(conn)
     if state in {"head", "previous"}:
-        assert names >= SQL_FUNCTIONS_NOW | EXPECTED_SECDEF_NOW
+        # `effective_meals` nasce con 0009 (SL-06a): c'è al head, il downgrade -1 la toglie.
+        assert names >= (SQL_FUNCTIONS_NOW - {"effective_meals"}) | EXPECTED_SECDEF_NOW
+        assert ("effective_meals" in names) is (state == "head"), names
         assert {"account", "session", "auth_flow"} <= tables, tables  # 0005 resta
         assert "rate_counter" in tables, tables  # 0006 resta dopo `downgrade -1`
         # 0007 (SL-04): le tre tabelle dei piatti restano dopo `downgrade -1` da 0008.
         assert {"dish", "dish_course", "dish_source"} <= tables, tables
         # 0008 (SL-05): `change_event` c'è al head e il downgrade -1 la toglie.
-        assert ("change_event" in tables) is (state == "head"), tables
+        assert "change_event" in tables, tables  # 0008 resta dopo `downgrade -1` da 0009
+        # 0009 (SL-06a): `meal` e `meal_item` ci sono al head e il downgrade -1 le toglie, con le
+        # CHECK di `change_event` ridefinite (CR-SL05-004) che tornano a quelle di 0008.
+        assert ({"meal", "meal_item"} <= tables) is (state == "head"), tables
+        assert not ({"meal", "meal_item"} & tables) or state == "head", tables
+        slot_ck = conn.execute(
+            "select pg_get_constraintdef(oid) from pg_constraint "
+            "where conrelid = 'app.change_event'::regclass "
+            "and conname = 'ck_change_event_meal_slot'"
+        ).fetchone()
+        assert slot_ck is not None
+        assert ("meal_type IS NOT NULL" in slot_ck[0]) is (state == "head"), slot_ck[0]
+        key_ck = conn.execute(
+            "select pg_get_constraintdef(oid) from pg_constraint "
+            "where conrelid = 'app.change_event'::regclass and conname = 'ck_change_event_key'"
+        ).fetchone()
+        assert key_ck is not None
+        assert ("subject_person_id IS NULL" in key_ck[0]) is (state == "head"), key_ck[0]
     else:
         assert names == set(), f"il downgrade ha lasciato funzioni: {names}"
         left = names & EXPECTED_IDENTITY_SECDEF
@@ -125,6 +144,8 @@ def _all_inventories(conn: psycopg.Connection, *, state: str) -> None:
             "rate_counter",
             "dish",
             "change_event",
+            "meal",
+            "meal_item",
         }, tables
         # `app.person` arriva con una slice successiva: in base non esiste (to_regclass → NULL),
         # se esiste non deve restare alcuna FK verso account.

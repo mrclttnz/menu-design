@@ -20,7 +20,9 @@ from sqlalchemy import text
 from menu import ratelimit, tenancy
 from menu.catalog.schemas import (
     Course,
+    CourseRef,
     DishDetail,
+    DishRef,
     DishStatus,
     DishSummary,
     DishUpdate,
@@ -132,6 +134,42 @@ def _family(ctx: RequestContext) -> UUID:
     if ctx.family_id is None or ctx.person_id is None:
         raise AppError(ErrorCode.FORBIDDEN)
     return ctx.family_id
+
+
+_DISH_REFS = text(
+    "select id, name, status, archived_at is not null as archived from app.dish "
+    "where family_id = :family and id = any(:ids)"
+)
+_COURSE_REFS = text(
+    "select id, base_code, name from app.course where family_id = :family and id = any(:ids)"
+)
+
+
+def read_refs(
+    tx: Tx, ctx: RequestContext, dish_ids: set[UUID], course_ids: set[UUID]
+) -> tuple[dict[UUID, DishRef], dict[UUID, CourseRef]]:
+    """Nome, stato e archiviazione dei piatti, e portate, citati da una vista composta.
+
+    Nella transazione del chiamante (una sola lettura coerente); solo della famiglia del contesto.
+    """
+    family = _family(ctx)
+    dish_rows = (
+        tx.execute(_DISH_REFS, {"family": family, "ids": sorted(dish_ids)}).mappings().all()
+        if dish_ids
+        else []
+    )
+    course_rows = (
+        tx.execute(_COURSE_REFS, {"family": family, "ids": sorted(course_ids)}).mappings().all()
+        if course_ids
+        else []
+    )
+    return (
+        {
+            r["id"]: DishRef(name=r["name"], status=r["status"], archived=r["archived"])
+            for r in dish_rows
+        },
+        {r["id"]: CourseRef(base_code=r["base_code"], name=r["name"]) for r in course_rows},
+    )
 
 
 def encode_cursor(name_search: str, dish_id: UUID) -> str:

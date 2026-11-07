@@ -1,0 +1,159 @@
+/* Piano e pasto (S-02, S-03, D-05, D-07): a 360 px niente scorrimento orizzontale (NFR-008). */
+.plan-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 calc(-1 * var(--space-4)) var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 2px solid var(--color-divider);
+  background: var(--color-bg);
+}
+
+.plan-range {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: center;
+  font-weight: 600;
+}
+
+.plan-day {
+  margin-bottom: var(--space-4);
+  border: 2px solid var(--color-divider);
+  border-radius: var(--radius);
+}
+
+.plan-day-past {
+  background: var(--color-surface);
+}
+
+.plan-day-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 2px solid var(--color-divider);
+}
+
+.plan-day-head h2 {
+  flex: 1 1 auto;
+  margin: 0;
+}
+
+.plan-day .badge {
+  display: inline-block;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 0.875rem;
+}
+
+.meal-list,
+.item-list,
+.add-meal-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.meal-row + .meal-row {
+  border-top: 1px solid var(--color-divider);
+}
+
+.meal-link {
+  display: flex;
+  flex-direction: column;
+  min-height: var(--target);
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-text);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.meal-name {
+  font-weight: 600;
+}
+
+.meal-summary {
+  color: var(--color-text-muted);
+}
+
+.meal-add {
+  margin: 0 var(--space-3) var(--space-2);
+}
+
+.plan-empty-actions,
+.range-shortcuts,
+.dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.add-meal-list li + li {
+  margin-top: var(--space-2);
+}
+
+.meal-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.meal-head h1 {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.meal-item {
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--color-divider);
+  overflow-wrap: anywhere;
+}
+
+.meal-item-name {
+  font-weight: 600;
+}
+
+.meal-item-meta {
+  display: block;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+.field {
+  margin: 0 0 var(--space-4);
+}
+
+.field label {
+  font-weight: 600;
+}
+
+.field input[type="date"] {
+  display: block;
+  width: 100%;
+  min-height: var(--target);
+  margin-top: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.field input[aria-invalid="true"] {
+  border-color: var(--color-danger);
+}
+
+.dialog-actions {
+  justify-content: flex-end;
+}

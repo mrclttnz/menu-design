@@ -12,6 +12,7 @@ Lo stub espone la pagina di consenso (identità dal cookie `stub_identity`, vedi
 database dal browser:
   {"kind": "bootstrap", "email": ..., "familyName": ...}
   {"kind": "member", "sub": ..., "email": ..., "role": ..., "displayName": ..., "familyName": ...,
+   "defaultMeals"?: ["lunch", "dinner"],   # SL-06a: `family_default_meal` (assenti: nessuna riga)
    "dishes": [{"name": ..., "id"?: ..., "status"?: ..., "courses"?: ["first"], "notes"?: ...,
                "prepTime"?: ..., "archived"?: bool, "sources"?: [...]}]}
 Con `member` (SL-04) la famiglia ha le 8 portate base e i piatti indicati (creati dal membro).
@@ -103,6 +104,10 @@ def main() -> int:
                 role=payload.get("role", "member"),
                 display_name=payload.get("displayName", "Mario Membro"),
             )
+            for meal_type in payload.get("defaultMeals", []):
+                owner.execute(
+                    "insert into app.family_default_meal values (%s, %s)", (family, meal_type)
+                )
             courses = make_courses(owner, family)
             seed_dishes(owner, family, person, courses, payload.get("dishes", []))
         else:

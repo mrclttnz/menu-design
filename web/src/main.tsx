@@ -4,9 +4,11 @@ import { createBrowserRouter, RouterProvider } from "react-router";
 import { AppProviders } from "./app/providers";
 import { routes } from "./app/routes";
 import { activateLocale } from "./i18n";
+import { reserveAriaStyleId } from "./lib/aria-style";
 import "./styles/tokens.css";
 import "./styles/base.css";
 
+reserveAriaStyleId();
 const container = document.getElementById("root");
 if (!container) throw new Error("radice mancante");
 const root = createRoot(container);

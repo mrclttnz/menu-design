@@ -167,3 +167,16 @@ def conflict_params(
         "modifiedBy": None if modified_by is None else str(modified_by),
         "modifiedAt": modified_at.isoformat().replace("+00:00", "Z"),
     }
+
+
+class DishRef(View):
+    """Riferimento a un piatto nelle viste composte (il piano): solo ciò che serve a mostrarlo."""
+
+    name: str
+    status: DishStatus
+    archived: bool
+
+
+class CourseRef(View):
+    base_code: BaseCode | None
+    name: str | None

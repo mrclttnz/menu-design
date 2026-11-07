@@ -22,6 +22,9 @@ OPERATIONS: dict[str, frozenset[Role]] = {
     # Operazioni future dell'archivio (SL-08): la regola c'è prima della rotta.
     "catalog.dish.archive": ADMIN_PLANNER,
     "catalog.dish.restore": ADMIN_PLANNER,
+    "plan.view.read": EVERYONE,
+    "meal.view.read": EVERYONE,
+    "meal.presence.write": ADMIN_PLANNER,
 }
 
 
@@ -29,6 +32,7 @@ OPERATIONS: dict[str, frozenset[Role]] = {
 # l'inventario in pytest confronta questa tabella con i test marcati `tracks`.
 TRACKS: dict[str, tuple[str, ...]] = {
     "catalog.dish.set_status": ("dish",),
+    "meal.presence.write": ("meal_content",),
 }
 
 

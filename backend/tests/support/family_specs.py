@@ -155,3 +155,45 @@ def event_sql(family: UUID) -> tuple[str, tuple[Any, ...]]:
 
 
 FAMILY_TABLE_SPECS["change_event"] = FamilyTableSpec(seed=_seed(event_sql), insert_sql=event_sql)
+
+
+# SL-06a: `meal` e `meal_item` (migrazione 0009). Gli INSERT di prova puntano a righe che la RLS
+# respinge prima di ogni FK, quindi gli identificativi possono essere casuali.
+MEAL_INSERT = (
+    "insert into app.meal (family_id, meal_date, meal_type, meal_slot, presence) "
+    "values (%s, '2026-10-24', 'lunch', 0, 'added')"
+)
+
+
+def seed_meal(owner: Owner, family: UUID) -> None:
+    ensure_family(owner, family)
+    owner.execute(MEAL_INSERT, (family,))
+
+
+def seed_meal_item(owner: Owner, family: UUID) -> None:
+    """Un pasto con una voce che punta a un piatto e a una portata della stessa famiglia."""
+    seed_dish(owner, family)
+    seed_meal(owner, family)
+    dish, course = owner.rows(
+        "select d.id, c.course_id from app.dish d join app.dish_course c on c.dish_id = d.id "
+        "where d.family_id = %s",
+        (family,),
+    )[0]
+    owner.execute(
+        "insert into app.meal_item (family_id, meal_date, meal_type, meal_slot, position, kind, "
+        "dish_id, course_id) values (%s, '2026-10-24', 'lunch', 0, 0, 'dish', %s, %s)",
+        (family, dish, course),
+    )
+
+
+FAMILY_TABLE_SPECS["meal"] = FamilyTableSpec(
+    seed=seed_meal, insert_sql=lambda f: (MEAL_INSERT.replace("'lunch'", "'dinner'"), (f,))
+)
+FAMILY_TABLE_SPECS["meal_item"] = FamilyTableSpec(
+    seed=seed_meal_item,
+    insert_sql=lambda f: (
+        "insert into app.meal_item (family_id, meal_date, meal_type, meal_slot, position, kind, "
+        "free_text) values (%s, '2026-10-24', 'lunch', 0, 5, 'free_text', 'x')",
+        (f,),
+    ),
+)

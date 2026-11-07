@@ -62,7 +62,8 @@ ACCOUNT_RLS_TABLES = frozenset({"session", "export_file"})
 # SL-02: tabelle di famiglia create da questa slice (05-data §4.2: `family` filtra su `id`,
 # le altre su `family_id`); ogni slice successiva estende questi elenchi.
 # SL-04 aggiunge `dish`, `dish_course`, `dish_source` (migrazione 0007); SL-05 `change_event`
-# (migrazione 0008, di sola aggiunta: vedi APPEND_ONLY_FAMILY_TABLES).
+# (migrazione 0008, di sola aggiunta: vedi APPEND_ONLY_FAMILY_TABLES); SL-06a `meal` e `meal_item`
+# (migrazione 0009).
 EXPECTED_FAMILY_TABLES_NOW = frozenset(
     {
         "family",
@@ -74,6 +75,8 @@ EXPECTED_FAMILY_TABLES_NOW = frozenset(
         "dish_course",
         "dish_source",
         "change_event",
+        "meal",
+        "meal_item",
     }
 )
 # Tabelle di famiglia di sola aggiunta: `menu_app` ha solo SELECT e INSERT (policy
@@ -109,9 +112,17 @@ INLINABLE_SQL_FUNCTIONS = frozenset(
         "effective_attendance",
     }
 )
-# Funzioni LANGUAGE sql create fino a questa slice (0001 + `family_today` di SL-02).
+# Funzioni LANGUAGE sql create fino a questa slice (0001 + `family_today` di SL-02 + SL-06a
+# `effective_meals`, migrazione 0009).
 SQL_FUNCTIONS_NOW = frozenset(
-    {"now_utc", "current_family_id", "current_account_id", "search_norm", "family_today"}
+    {
+        "now_utc",
+        "current_family_id",
+        "current_account_id",
+        "search_norm",
+        "family_today",
+        "effective_meals",
+    }
 )
 
 _FORBIDDEN_TIME = re.compile(

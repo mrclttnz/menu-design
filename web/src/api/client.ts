@@ -83,6 +83,13 @@ function problemFrom(parsed: unknown): ProblemInfo {
   return { code: "unknown" };
 }
 
+/** `Retry-After` (secondi) diventa `params.retryAfterSeconds` se il corpo non lo porta già. */
+function addRetryAfter(problem: ProblemInfo, header: string | null): void {
+  if (problem.params?.["retryAfterSeconds"] !== undefined) return;
+  if (header === null || !/^[0-9]{1,6}$/.test(header.trim())) return;
+  problem.params = { ...problem.params, retryAfterSeconds: Number(header.trim()) };
+}
+
 async function readJson(response: Response): Promise<{ ok: true; value: unknown } | { ok: false }> {
   try {
     const text = await response.text();
@@ -144,6 +151,7 @@ export function createApiClient(
       return { ok: true, status: response.status, data: body.value as T };
     }
     const problem: ProblemInfo = body.ok ? problemFrom(body.value) : { code: "unknown" };
+    if (response.status === 429) addRetryAfter(problem, response.headers.get("Retry-After"));
     notify(problem.code);
     return { ok: false, status: response.status, problem };
   }

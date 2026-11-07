@@ -85,6 +85,8 @@ export async function seedMember(
     role?: string;
     displayName?: string;
     familyName?: string;
+    /** Pasti di default della famiglia (SL-06a): per esempio `["lunch", "dinner"]`. */
+    defaultMeals?: string[];
     dishes?: SeedDish[];
   },
 ): Promise<void> {

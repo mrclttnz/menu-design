@@ -1,0 +1,9 @@
+# Eccezione STRETTA e DATATA alla scansione dell'immagine (ADR-0018, decisione utente 2026-11-07).
+# Solo questi due ID, solo fino alla scadenza: dopo `expired_at` trivy torna a bloccare da solo.
+vulnerabilities:
+  - id: CVE-2026-76844
+    expired_at: 2026-11-21
+    statement: zlib1g 1.3.1-1+b1 nell'immagine base; correzione deb13u1 non ancora nell'immagine slim (ADR-0018)
+  - id: CVE-2026-85091
+    expired_at: 2026-11-21
+    statement: zlib1g 1.3.1-1+b1 nell'immagine base; correzione deb13u1 non ancora nell'immagine slim (ADR-0018)

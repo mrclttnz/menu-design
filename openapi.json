@@ -717,6 +717,394 @@
           ]
         }
       }
+    },
+    "/api/v1/meals/{date}/{mealType}/{slot}": {
+      "get": {
+        "summary": "Read Meal",
+        "operationId": "meal.view.read",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "Date"
+            }
+          },
+          {
+            "name": "mealType",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "breakfast",
+                "lunch",
+                "snack",
+                "dinner",
+                "other"
+              ],
+              "type": "string",
+              "title": "Mealtype"
+            }
+          },
+          {
+            "name": "slot",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Slot"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Il pasto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MealView"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "description": "Versione del contenuto, `\"<n>\"` (`0` se mai scritto)",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Errore (RFC 9457, `code` di ADR-0010)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sessione assente o scaduta",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Slot non valido per il tipo di pasto",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Data o tipo di pasto non validi",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-authz": {
+          "scope": "family",
+          "roles": [
+            "admin",
+            "planner",
+            "member"
+          ]
+        }
+      }
+    },
+    "/api/v1/meals/{date}/{mealType}/{slot}/presence": {
+      "put": {
+        "summary": "Set Presence",
+        "operationId": "meal.presence.write",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "Date"
+            }
+          },
+          {
+            "name": "mealType",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "breakfast",
+                "lunch",
+                "snack",
+                "dinner",
+                "other"
+              ],
+              "type": "string",
+              "title": "Mealtype"
+            }
+          },
+          {
+            "name": "slot",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Slot"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ETag \"<n>\"",
+              "title": "If-Match"
+            },
+            "description": "ETag \"<n>\""
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PresenceChange"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Il pasto aggiornato",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MealView"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "description": "Nuova versione del contenuto, `\"<n>\"`",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Errore (RFC 9457, `code` di ADR-0010)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sessione assente o scaduta",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Ruolo senza permesso (Membro) o token CSRF non valido",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Slot non valido per il tipo di pasto",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Versione superata: `params.current` è il pasto attuale",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Corpo, data, tipo di pasto o `If-Match` non validi",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "`If-Match` assente",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Limite di frequenza (sessione, account) o tetto giornaliero di scritture tracciate della famiglia; `Retry-After` in secondi",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-authz": {
+          "scope": "family",
+          "roles": [
+            "admin",
+            "planner"
+          ],
+          "tracks": [
+            "meal_content"
+          ]
+        }
+      }
+    },
+    "/api/v1/plan": {
+      "get": {
+        "summary": "Read Plan",
+        "operationId": "plan.view.read",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Primo giorno, `AAAA-MM-GG` (default: lunedì della settimana corrente)",
+              "format": "date",
+              "title": "From"
+            },
+            "description": "Primo giorno, `AAAA-MM-GG` (default: lunedì della settimana corrente)"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Ultimo giorno incluso, `AAAA-MM-GG` (default: domenica corrente)",
+              "format": "date",
+              "title": "To"
+            },
+            "description": "Ultimo giorno incluso, `AAAA-MM-GG` (default: domenica corrente)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Giorni dell'intervallo, ciascuno con i suoi pasti",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanView"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Errore (RFC 9457, `code` di ADR-0010)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sessione assente o scaduta",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`range_too_large` (`params.maxDays`: 62) oppure `validation` (`range_order`, `date_invalid`)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "x-authz": {
+          "scope": "family",
+          "roles": [
+            "admin",
+            "planner",
+            "member"
+          ]
+        }
+      }
     }
   },
   "components": {
@@ -941,6 +1329,71 @@
         ],
         "title": "CoursePage"
       },
+      "CourseRef": {
+        "properties": {
+          "baseCode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "starter",
+                  "first",
+                  "second",
+                  "side",
+                  "one_dish",
+                  "dessert",
+                  "drink",
+                  "other"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basecode"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "baseCode",
+          "name"
+        ],
+        "title": "CourseRef"
+      },
+      "DayView": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "meals": {
+            "items": {
+              "$ref": "#/components/schemas/MealView"
+            },
+            "type": "array",
+            "title": "Meals"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "date",
+          "meals"
+        ],
+        "title": "DayView"
+      },
       "DishDetail": {
         "properties": {
           "id": {
@@ -1061,6 +1514,34 @@
           "nextCursor"
         ],
         "title": "DishPage"
+      },
+      "DishRef": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "to_try",
+              "tested"
+            ],
+            "title": "Status"
+          },
+          "archived": {
+            "type": "boolean",
+            "title": "Archived"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "status",
+          "archived"
+        ],
+        "title": "DishRef",
+        "description": "Riferimento a un piatto nelle viste composte (il piano): solo ciò che serve a mostrarlo."
       },
       "DishSummary": {
         "properties": {
@@ -1395,6 +1876,170 @@
         "title": "LogoutRequest",
         "description": "Corpo `{}`."
       },
+      "MealItemView": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "position": {
+            "type": "integer",
+            "title": "Position"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "dish",
+              "free_text"
+            ],
+            "title": "Kind"
+          },
+          "dishId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dishid"
+          },
+          "courseId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Courseid"
+          },
+          "freeText": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Freetext"
+          },
+          "notCooked": {
+            "type": "boolean",
+            "title": "Notcooked"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "position",
+          "kind",
+          "notCooked"
+        ],
+        "title": "MealItemView"
+      },
+      "MealView": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "mealType": {
+            "type": "string",
+            "enum": [
+              "breakfast",
+              "lunch",
+              "snack",
+              "dinner",
+              "other"
+            ],
+            "title": "Mealtype"
+          },
+          "slot": {
+            "type": "integer",
+            "title": "Slot"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "present": {
+            "type": "boolean",
+            "title": "Present"
+          },
+          "special": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "away",
+                  "restaurant",
+                  "skipped"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Special"
+          },
+          "contentVersion": {
+            "type": "integer",
+            "title": "Contentversion"
+          },
+          "contentModifiedBy": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contentmodifiedby"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MealItemView"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "past": {
+            "type": "boolean",
+            "title": "Past"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "mealType",
+          "slot",
+          "name",
+          "present",
+          "special",
+          "contentVersion",
+          "contentModifiedBy",
+          "items",
+          "past"
+        ],
+        "title": "MealView"
+      },
       "NoticeView": {
         "properties": {
           "id": {
@@ -1447,6 +2092,98 @@
           "role"
         ],
         "title": "PersonView"
+      },
+      "PlanRefs": {
+        "properties": {
+          "dishes": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/DishRef"
+            },
+            "propertyNames": {
+              "format": "uuid"
+            },
+            "type": "object",
+            "title": "Dishes"
+          },
+          "courses": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/CourseRef"
+            },
+            "propertyNames": {
+              "format": "uuid"
+            },
+            "type": "object",
+            "title": "Courses"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "dishes",
+          "courses"
+        ],
+        "title": "PlanRefs",
+        "description": "Piatti e portate citati dalle voci del piano, per identificativo (nessun altro)."
+      },
+      "PlanView": {
+        "properties": {
+          "from": {
+            "type": "string",
+            "format": "date",
+            "title": "From"
+          },
+          "to": {
+            "type": "string",
+            "format": "date",
+            "title": "To"
+          },
+          "today": {
+            "type": "string",
+            "format": "date",
+            "title": "Today"
+          },
+          "timezone": {
+            "type": "string",
+            "title": "Timezone"
+          },
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/DayView"
+            },
+            "type": "array",
+            "title": "Days"
+          },
+          "refs": {
+            "$ref": "#/components/schemas/PlanRefs"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "from",
+          "to",
+          "today",
+          "timezone",
+          "days",
+          "refs"
+        ],
+        "title": "PlanView",
+        "description": "`GET /plan` (piano §4.2): giorni, pasti con voci, e i riferimenti per mostrarli."
+      },
+      "PresenceChange": {
+        "properties": {
+          "present": {
+            "type": "boolean",
+            "title": "Present"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "present"
+        ],
+        "title": "PresenceChange",
+        "description": "`PUT .../presence`: aggiungere (`true`) o togliere (`false`) il pasto di quel giorno."
       },
       "ProblemDetails": {
         "properties": {

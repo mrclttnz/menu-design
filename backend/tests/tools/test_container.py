@@ -227,3 +227,16 @@ def test_container_refuses_to_start_without_app_env(image: str) -> None:
     )
     assert out.returncode != 0
     assert "app_env" in (out.stdout + out.stderr).lower()
+
+
+def test_trivy_exception_is_limited_dated_and_only_on_the_image_scan() -> None:
+    """ADR-0018: solo i due CVE di zlib1g, scadenza 2026-11-21, solo `trivy image`."""
+    ignore = (REPO / ".trivyignore.yaml").read_text(encoding="utf-8")
+    ids = re.findall(r"^\s*- id:\s*(\S+)\s*$", ignore, re.M)
+    assert sorted(ids) == ["CVE-2026-76844", "CVE-2026-85091"]
+    assert re.findall(r"expired_at:\s*(\S+)", ignore) == ["2026-11-21"] * 2
+    lines = (REPO / "Makefile").read_text(encoding="utf-8").splitlines()
+    image = next(ln for ln in lines if ln.strip().startswith("trivy image"))
+    config = next(ln for ln in lines if ln.strip().startswith("trivy config"))
+    assert "--ignorefile .trivyignore.yaml" in image
+    assert "--ignorefile" not in config

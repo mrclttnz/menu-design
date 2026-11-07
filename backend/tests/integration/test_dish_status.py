@@ -35,7 +35,7 @@ from support.dishes import (
     payload,
 )
 from support.owner import Owner
-from support.tracks import assert_tracks, tracked_count
+from support.tracks import assert_tracks, local_day_start_utc, tracked_count
 
 pytestmark = pytest.mark.integration
 Login = Callable[[Who], Actor]
@@ -275,6 +275,7 @@ def test_ac_049_4_failed_attempts_leave_no_event_and_the_success_leaves_exactly_
             ("422 If-Match malformato", lambda: set_status(planner, dish, "tested", "abc"), 422),
             ("422 corpo vuoto", lambda: planner.post(url(dish), {}, if_match=1), 422),
         ],
+        window_start=local_day_start_utc(T0, "Europe/Rome"),  # caso «al limite» (backlog SL-05)
     )
 
 

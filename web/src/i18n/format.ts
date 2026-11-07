@@ -57,6 +57,13 @@ export function formatDayHeading(isoDate: string, locale = FORMAT_LOCALE): strin
   return `${capitalized} ${day}`;
 }
 
+/** «venerdì 23 ottobre»: giorno della settimana, giorno e mese di una data di calendario. */
+export function formatLongDate(isoDate: string, locale = FORMAT_LOCALE): string {
+  return utc(locale, { weekday: "long", day: "numeric", month: "long" }).format(
+    calendarDate(isoDate),
+  );
+}
+
 export function formatTime(value: Date | string, timeZone: string, locale = FORMAT_LOCALE): string {
   return new Intl.DateTimeFormat(locale, {
     timeZone,

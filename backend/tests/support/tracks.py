@@ -18,6 +18,7 @@ from zoneinfo import ZoneInfo
 from httpx import Response
 
 from support.dishes import Fam, event_rows, family_state_hash
+from support.meals import planning_state
 from support.owner import Owner
 from support.ratelimit import PEPPER_A
 
@@ -74,6 +75,7 @@ def assert_tracks(
     happy: Callable[[], Response],
     expected: Sequence[dict[str, Any]],
     failing: Sequence[tuple[str, Callable[[], Response], int]],
+    window_start: datetime | None = None,
 ) -> Response:
     """08 §6.3: (b) ogni richiesta fallita lascia zero eventi, nessuna modifica e il contatore
     `tracked_family` com'era; (a) il successo scrive ESATTAMENTE gli eventi attesi; (c) e il
@@ -81,18 +83,43 @@ def assert_tracks(
 
     `expected`: un dizionario di colonne attese per evento (sottoinsieme delle colonne di
     `change_event`), nell'ordine di scrittura.
+
+    `window_start` (backlog SL-05, CR-SL05-004): l'inizio della finestra giornaliera della famiglia
+    (`local_day_start_utc`). Se indicato si prova anche il caso «al limite»: con il contatore a
+    5.000 la richiesta di successo dà `429` con `Retry-After`, senza eventi né modifiche (una
+    rotta che dimentica `tracked_write` darebbe invece 500); poi il contatore torna com'era.
+    Gli stati confrontati comprendono anche `meal` e `meal_item` (SL-06a).
     """
     base_events = len(event_rows(owner))
     base_count = tracked_count(owner, fam.id)
     for label, send, status in failing:
-        state = family_state_hash(owner, fam)
+        state = (family_state_hash(owner, fam), planning_state(owner, fam))
         response = send()
         assert response.status_code == status, (label, response.status_code, response.text)
         assert len(event_rows(owner)) == base_events, f"{label}: evento scritto (AC-049.4)"
-        assert family_state_hash(owner, fam) == state, f"{label}: stato modificato"
+        assert (family_state_hash(owner, fam), planning_state(owner, fam)) == state, (
+            f"{label}: stato modificato"
+        )
         assert tracked_count(owner, fam.id) == base_count, (
             f"{label}: ha consumato il tetto (SR-070)"
         )
+    if window_start is not None:
+        state = (family_state_hash(owner, fam), planning_state(owner, fam))
+        seed_tracked(owner, fam.id, DAILY_LIMIT, window_start)
+        limited = happy()
+        assert limited.status_code == 429, ("al limite", limited.status_code, limited.text)
+        assert limited.json()["code"] == "rate_limited"
+        assert int(limited.headers["retry-after"]) > 0
+        assert len(event_rows(owner)) == base_events, "al limite: evento scritto"
+        assert (family_state_hash(owner, fam), planning_state(owner, fam)) == state, (
+            "al limite: stato modificato"
+        )
+        owner.execute(
+            "delete from app.rate_counter where key = %s and window_start = %s",
+            (tracked_key(fam.id), window_start),
+        )
+        if base_count:
+            seed_tracked(owner, fam.id, base_count, window_start)
     response = happy()
     assert response.status_code == 200, (response.status_code, response.text)
     events = event_rows(owner)[base_events:]

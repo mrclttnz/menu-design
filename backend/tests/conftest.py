@@ -399,3 +399,20 @@ def login(auth_client: TestClient, oidc: FakeOidc) -> Callable[[Who], Actor]:
         return connect(Browser(auth_client), oidc, who)
 
     return _login
+
+
+# --- piano della settimana (SL-06a): orologio al 2026-10-23, pasti di default pranzo e cena -------
+
+
+@pytest.fixture
+def meal_world(world: World, owner: Owner, frozen_now: Callable[[datetime], None]) -> World:
+    """Alfa e Beta con pranzo e cena di default, congelato da molto prima, ora = T0."""
+    from datetime import timedelta
+
+    from support.meals import T0, YESTERDAY, set_defaults, set_frozen_through
+
+    frozen_now(T0)
+    for fam in (world.alfa, world.beta):
+        set_defaults(owner, fam, ("lunch", "dinner"))
+        set_frozen_through(owner, fam, YESTERDAY - timedelta(days=30))
+    return world

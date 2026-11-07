@@ -213,3 +213,8 @@ a {
   color: var(--color-primary-hover);
   box-shadow: inset 0 -4px 0 var(--color-primary);
 }
+
+/* Regola che React Aria inserirebbe con un <style> (vietato dalla CSP): vedi lib/aria-style.ts. */
+[data-react-aria-pressable] {
+  touch-action: pan-x pan-y pinch-zoom;
+}

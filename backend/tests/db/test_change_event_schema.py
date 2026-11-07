@@ -209,32 +209,103 @@ def test_check_constraints_accept_the_documented_variants(
     assert owner.scalar("select count(*) from app.change_event") == 1
 
 
-@pytest.mark.parametrize(
-    ("unit_type", "op", "missing"),
-    [
-        ("meal_content", "set", {"meal_date": None}),
-        ("meal_content", "set", {"meal_type": None}),
-        ("meal_content", "set", {"meal_slot": None}),
-        ("meal_guests", "set", {"meal_date": None}),
-        ("attendance", "set", {"subject_person_id": None}),
-        ("typical_week", "set", {"subject_person_id": None}),
-        ("membership", "role_change", {"subject_person_id": None}),
-    ],
-)
-def test_the_key_shape_check_requires_the_keys_of_each_unit_type(
-    owner: Owner, unit_type: str, op: str, missing: dict[str, Any]
+KEY_COLUMNS = ("meal_date", "meal_type", "meal_slot", "subject_person_id", "dish_id")
+# 05-data §12 (CR-SL05-004): per ogni tipo di unità le colonne chiave ESATTE; le altre sono NULL.
+UNIT_KEYS: dict[str, tuple[str, str, frozenset[str]]] = {
+    "meal_content": ("meal_content", "set", frozenset({"meal_date", "meal_type", "meal_slot"})),
+    "meal_guests": ("meal_guests", "set", frozenset({"meal_date", "meal_type", "meal_slot"})),
+    "attendance": (
+        "attendance",
+        "set",
+        frozenset({"meal_date", "meal_type", "meal_slot", "subject_person_id"}),
+    ),
+    "typical_week": ("typical_week", "set", frozenset({"subject_person_id"})),
+    "membership": ("membership", "role_change", frozenset({"subject_person_id"})),
+    "dish": ("dish", "status_change", frozenset({"dish_id"})),
+}
+SAMPLE: dict[str, Any] = {
+    "meal_date": "2026-10-23",
+    "meal_type": "lunch",
+    "meal_slot": 0,
+}
+
+
+def _exact_row(unit_type: str) -> dict[str, Any]:
+    unit, op, wanted = UNIT_KEYS[unit_type]
+    keys: dict[str, Any] = {c: None for c in KEY_COLUMNS}
+    for column in wanted:
+        keys[column] = SAMPLE.get(column) if column in SAMPLE else uuid4()
+    after = '{"v":1,"st":"tested"}' if unit == "dish" else '{"v":1}'
+    before = '{"st":"to_try"}' if unit == "dish" else None
+    return {"unit_type": unit, "op": op, "before": before, "after": after} | keys
+
+
+@pytest.mark.parametrize("unit_type", sorted(UNIT_KEYS))
+def test_the_key_columns_of_each_unit_type_are_exact_and_accepted(
+    owner: Owner, unit_type: str
 ) -> None:
-    keys = {
-        "dish_id": None,
+    _insert_raw(owner, **_exact_row(unit_type))
+    assert owner.scalar("select count(*) from app.change_event") == 1
+
+
+@pytest.mark.parametrize("unit_type", sorted(UNIT_KEYS))
+def test_a_missing_key_column_of_the_unit_is_refused(owner: Owner, unit_type: str) -> None:
+    for column in UNIT_KEYS[unit_type][2]:
+        with pytest.raises(errors.CheckViolation):
+            _insert_raw(owner, **(_exact_row(unit_type) | {column: None}))
+
+
+@pytest.mark.parametrize("unit_type", sorted(UNIT_KEYS))
+def test_a_key_column_of_another_unit_type_is_refused(owner: Owner, unit_type: str) -> None:
+    """CR-SL05-004: `ck_change_event_key` rifiuta le colonne chiave che l'unità non usa."""
+    extras = {
         "meal_date": "2026-10-23",
         "meal_type": "lunch",
         "meal_slot": 0,
         "subject_person_id": uuid4(),
+        "dish_id": uuid4(),
     }
-    ok = {"unit_type": unit_type, "op": op, "before": None, "after": '{"v":1}'} | keys
-    _insert_raw(owner, **ok)  # completa: accettata
+    for column in set(KEY_COLUMNS) - UNIT_KEYS[unit_type][2]:
+        with pytest.raises(errors.CheckViolation):
+            _insert_raw(owner, **(_exact_row(unit_type) | {column: extras[column]}))
+
+
+@pytest.mark.parametrize("slot", [1, 3, 4])
+def test_a_meal_slot_without_a_meal_type_is_refused_by_the_slot_check(
+    owner: Owner, catalog: psycopg.Connection, slot: int
+) -> None:
+    """CR-SL05-004: NULL `meal_type` con uno slot passava (`NULL` in un CHECK è «vero»)."""
+    definition = catalog.execute(
+        "select pg_get_constraintdef(oid) from pg_constraint where conname = "
+        "'ck_change_event_meal_slot' and conrelid = 'app.change_event'::regclass"
+    ).fetchone()
+    assert definition is not None
+    assert "meal_type IS NOT NULL" in definition[0], definition[0]
     with pytest.raises(errors.CheckViolation):
-        _insert_raw(owner, **(ok | missing))
+        _insert_raw(owner, meal_slot=slot)
+
+
+@pytest.mark.parametrize(
+    ("meal_type", "slot", "ok"),
+    [
+        ("other", 0, True),
+        ("other", 4, True),
+        ("other", 5, False),
+        ("lunch", 0, True),
+        ("lunch", 1, False),
+        ("breakfast", 4, False),
+    ],
+)
+def test_the_meal_slot_domain_matches_the_meal_table(
+    owner: Owner, meal_type: str, slot: int, ok: bool
+) -> None:
+    row = _exact_row("meal_content") | {"meal_type": meal_type, "meal_slot": slot}
+    if ok:
+        _insert_raw(owner, **row)
+        assert owner.scalar("select count(*) from app.change_event") == 1
+    else:
+        with pytest.raises(errors.CheckViolation):
+            _insert_raw(owner, **row)
 
 
 def test_before_plus_after_above_20480_bytes_is_refused(owner: Owner) -> None:

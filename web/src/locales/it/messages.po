@@ -16,8 +16,20 @@ msgid "common.required"
 msgstr "(obbligatorio)"
 
 #. js-lingui-explicit-id
+msgid "meal.heading"
+msgstr "{meal} · {date}"
+
+#. js-lingui-explicit-id
+msgid "plan.meal.aria"
+msgstr "{meal} di {date}: {summary}. Apri il pasto"
+
+#. js-lingui-explicit-id
 msgid "dish.status.changed.toast"
 msgstr "{name} è ora {status}"
+
+#. js-lingui-explicit-id
+msgid "plan.range"
+msgstr "{start} - {end}"
 
 #. js-lingui-explicit-id
 msgid "app.documentTitle"
@@ -60,8 +72,36 @@ msgid "dishes.empty.cta"
 msgstr "Aggiungi il primo piatto"
 
 #. js-lingui-explicit-id
+msgid "plan.meal.add"
+msgstr "Aggiungi piatto"
+
+#. js-lingui-explicit-id
+msgid "meal.add"
+msgstr "Aggiungi piatto o voce"
+
+#. js-lingui-explicit-id
+msgid "plan.day.addMeal"
+msgstr "Aggiungi un pasto"
+
+#. js-lingui-explicit-id
+msgid "meal.add.title"
+msgstr "Aggiungi un pasto"
+
+#. js-lingui-explicit-id
+msgid "plan.empty.noMeals.cta2"
+msgstr "Aggiungi un pasto a un giorno"
+
+#. js-lingui-explicit-id
 msgid "dish.source.add"
 msgstr "Aggiungi una fonte"
+
+#. js-lingui-explicit-id
+msgid "meal.added.toast"
+msgstr "Aggiunto {name}"
+
+#. js-lingui-explicit-id
+msgid "plan.range.to"
+msgstr "Al"
 
 #. js-lingui-explicit-id
 msgid "nav.more"
@@ -76,8 +116,20 @@ msgid "dish.source.type.other"
 msgstr "Altro"
 
 #. js-lingui-explicit-id
+msgid "meal.type.other"
+msgstr "Altro pasto"
+
+#. js-lingui-explicit-id
 msgid "role.admin"
 msgstr "Amministratore"
+
+#. js-lingui-explicit-id
+msgid "plan.meal.nothing"
+msgstr "Ancora niente"
+
+#. js-lingui-explicit-id
+msgid "meal.empty"
+msgstr "Ancora niente in questo pasto"
 
 #. js-lingui-explicit-id
 msgid "common.cancel"
@@ -108,16 +160,36 @@ msgid "dish.status.archived"
 msgstr "Archiviato"
 
 #. js-lingui-explicit-id
+msgid "meal.item.archived"
+msgstr "Archiviato"
+
+#. js-lingui-explicit-id
+msgid "plan.day.menu"
+msgstr "Azioni per {day}"
+
+#. js-lingui-explicit-id
 msgid "dish.course.drink"
 msgstr "Bevanda"
+
+#. js-lingui-explicit-id
+msgid "meal.item.changeCourse"
+msgstr "Cambia portata"
 
 #. js-lingui-explicit-id
 msgid "common.loading"
 msgstr "Caricamento…"
 
 #. js-lingui-explicit-id
+msgid "meal.type.dinner"
+msgstr "Cena"
+
+#. js-lingui-explicit-id
 msgid "dishes.search"
 msgstr "Cerca per nome"
+
+#. js-lingui-explicit-id
+msgid "plan.empty.notReady.body"
+msgstr "Chi pianifica non ha ancora inserito i pasti di questa settimana."
 
 #. js-lingui-explicit-id
 msgid "common.close"
@@ -126,6 +198,10 @@ msgstr "Chiudi"
 #. js-lingui-explicit-id
 msgid "common.loading.slow"
 msgstr "Ci sta mettendo più del solito…"
+
+#. js-lingui-explicit-id
+msgid "meal.type.breakfast"
+msgstr "Colazione"
 
 #. js-lingui-explicit-id
 msgid "dish.status.tested"
@@ -180,6 +256,10 @@ msgid "dish.status.toTry"
 msgstr "Da provare"
 
 #. js-lingui-explicit-id
+msgid "plan.range.from"
+msgstr "Dal"
+
+#. js-lingui-explicit-id
 msgid "dish.source.text"
 msgstr "Descrizione"
 
@@ -190,6 +270,10 @@ msgstr "Dolce"
 #. js-lingui-explicit-id
 msgid "dish.sources.title"
 msgstr "Dove trovi la ricetta"
+
+#. js-lingui-explicit-id
+msgid "plan.dayChanged.toast"
+msgstr "È cambiato il giorno: il piano è stato aggiornato."
 
 #. js-lingui-explicit-id
 msgid "common.delete"
@@ -222,6 +306,10 @@ msgstr "Fatto"
 #. js-lingui-explicit-id
 msgid "dish.source.n"
 msgstr "Fonte {n}"
+
+#. js-lingui-explicit-id
+msgid "meal.special.out"
+msgstr "Fuori casa"
 
 #. js-lingui-explicit-id
 msgid "role.admin.desc"
@@ -258,6 +346,10 @@ msgstr "Hai usato un account Google diverso da quello con cui sei collegato. Acc
 #. js-lingui-explicit-id
 msgid "auth.login.subtitle"
 msgstr "Il piano dei pasti della tua famiglia, sempre in tasca."
+
+#. js-lingui-explicit-id
+msgid "plan.empty.notReady.title"
+msgstr "Il piano non è ancora pronto"
 
 #. js-lingui-explicit-id
 msgid "dishes.empty.title"
@@ -328,12 +420,28 @@ msgid "dish.time.under30"
 msgstr "Meno di 30 minuti"
 
 #. js-lingui-explicit-id
+msgid "meal.menu"
+msgstr "Menu del pasto"
+
+#. js-lingui-explicit-id
+msgid "plan.menu.week"
+msgstr "Menu della settimana"
+
+#. js-lingui-explicit-id
 msgid "app.name"
 msgstr "Menu Design"
 
 #. js-lingui-explicit-id
+msgid "meal.type.snack"
+msgstr "Merenda"
+
+#. js-lingui-explicit-id
 msgid "common.edit"
 msgstr "Modifica"
+
+#. js-lingui-explicit-id
+msgid "plan.range.show"
+msgstr "Mostra"
 
 #. js-lingui-explicit-id
 msgid "common.showMore"
@@ -344,12 +452,20 @@ msgid "dishes.filter.archived"
 msgstr "Mostra archiviati"
 
 #. js-lingui-explicit-id
+msgid "plan.menu.otherRange"
+msgstr "Mostra un altro intervallo…"
+
+#. js-lingui-explicit-id
 msgid "nav.label"
 msgstr "Navigazione principale"
 
 #. js-lingui-explicit-id
 msgid "dish.deleteBlocked"
 msgstr "Nel frattempo questo piatto è stato aggiunto a un pasto, quindi non si può eliminare. Puoi archiviarlo."
+
+#. js-lingui-explicit-id
+msgid "plan.empty.noMeals.title"
+msgstr "Nessun pasto da pianificare"
 
 #. js-lingui-explicit-id
 msgid "dishes.noResults"
@@ -362,6 +478,10 @@ msgstr "Nome del piatto"
 #. js-lingui-explicit-id
 msgid "dish.archive.confirm.body"
 msgstr "Non comparirà più tra le scelte, ma resterà visibile nei piani passati. Potrai ripristinarlo quando vuoi."
+
+#. js-lingui-explicit-id
+msgid "meal.item.notCooked"
+msgstr "Non cucinato"
 
 #. js-lingui-explicit-id
 msgid "dish.delete.confirm.body"
@@ -392,6 +512,10 @@ msgid "dishes.error.load"
 msgstr "Non riusciamo a caricare i piatti. Riprova."
 
 #. js-lingui-explicit-id
+msgid "plan.error.load"
+msgstr "Non riusciamo a caricare il piano. Controlla la connessione e riprova."
+
+#. js-lingui-explicit-id
 msgid "dish.field.notes.hint"
 msgstr "Non scrivere informazioni sulla salute di nessuno (per esempio allergie)."
 
@@ -406,6 +530,10 @@ msgstr "Non siamo riusciti a salvare. Controlla la connessione e riprova."
 #. js-lingui-explicit-id
 msgid "error.notFound"
 msgstr "Non troviamo quello che cerchi. Potrebbe essere stato eliminato."
+
+#. js-lingui-explicit-id
+msgid "meal.special.normal"
+msgstr "Normale"
 
 #. js-lingui-explicit-id
 msgid "dish.source.note"
@@ -424,12 +552,24 @@ msgid "common.today"
 msgstr "Oggi"
 
 #. js-lingui-explicit-id
+msgid "plan.day.today"
+msgstr "Oggi"
+
+#. js-lingui-explicit-id
 msgid "dish.source.page"
 msgstr "Pagina"
 
 #. js-lingui-explicit-id
 msgid "error.notFound.title"
 msgstr "Pagina non trovata"
+
+#. js-lingui-explicit-id
+msgid "plan.day.past"
+msgstr "Passato"
+
+#. js-lingui-explicit-id
+msgid "meal.typeChanged.toast"
+msgstr "Pasto segnato come {type}"
 
 #. js-lingui-explicit-id
 msgid "error.reauth"
@@ -444,12 +584,20 @@ msgid "nav.plan"
 msgstr "Piano"
 
 #. js-lingui-explicit-id
+msgid "plan.title"
+msgstr "Piano"
+
+#. js-lingui-explicit-id
 msgid "nav.dishes"
 msgstr "Piatti"
 
 #. js-lingui-explicit-id
 msgid "dishes.title"
 msgstr "Piatti"
+
+#. js-lingui-explicit-id
+msgid "meal.section.items"
+msgstr "Piatti e voci"
 
 #. js-lingui-explicit-id
 msgid "dish.saved.toast"
@@ -468,8 +616,16 @@ msgid "dish.field.courses"
 msgstr "Portate"
 
 #. js-lingui-explicit-id
+msgid "meal.type.lunch"
+msgstr "Pranzo"
+
+#. js-lingui-explicit-id
 msgid "dish.course.first"
 msgstr "Primo"
+
+#. js-lingui-explicit-id
+msgid "plan.range.nextTwo"
+msgstr "Prossime 2 settimane"
 
 #. js-lingui-explicit-id
 msgid "error.quota_exceeded.other_meals_per_day"
@@ -490,6 +646,10 @@ msgstr "Qualcuno ha modificato questi dati"
 #. js-lingui-explicit-id
 msgid "conflict.title.meal"
 msgstr "Qualcuno ha modificato questo pasto"
+
+#. js-lingui-explicit-id
+msgid "plan.range.thisWeek"
+msgstr "Questa settimana"
 
 #. js-lingui-explicit-id
 msgid "auth.noFamily.body"
@@ -540,12 +700,24 @@ msgid "common.retry"
 msgstr "Riprova"
 
 #. js-lingui-explicit-id
+msgid "meal.special.restaurant"
+msgstr "Ristorante"
+
+#. js-lingui-explicit-id
 msgid "dish.source.type.magazine"
 msgstr "Rivista"
 
 #. js-lingui-explicit-id
+msgid "meal.special.skipped"
+msgstr "Saltato"
+
+#. js-lingui-explicit-id
 msgid "common.save"
 msgstr "Salva"
+
+#. js-lingui-explicit-id
+msgid "meal.item.saveToArchive"
+msgstr "Salva tra i piatti"
 
 #. js-lingui-explicit-id
 msgid "error.range_too_large"
@@ -558,6 +730,18 @@ msgstr "Scegli almeno una portata."
 #. js-lingui-explicit-id
 msgid "dish.field.courses.hint"
 msgstr "Scegli almeno una portata."
+
+#. js-lingui-explicit-id
+msgid "plan.empty.noMeals.cta1"
+msgstr "Scegli i pasti di ogni giorno"
+
+#. js-lingui-explicit-id
+msgid "plan.empty.noMeals.body"
+msgstr "Scegli quali pasti compaiono ogni giorno, oppure aggiungine uno a un giorno."
+
+#. js-lingui-explicit-id
+msgid "plan.range.title"
+msgstr "Scegli un intervallo"
 
 #. js-lingui-explicit-id
 msgid "validation.priority_range"
@@ -580,8 +764,36 @@ msgid "dish.status.markTested"
 msgstr "Segna come collaudato"
 
 #. js-lingui-explicit-id
+msgid "meal.item.markCooked"
+msgstr "Segna come cucinato"
+
+#. js-lingui-explicit-id
+msgid "meal.item.markNotCooked"
+msgstr "Segna come non cucinato"
+
+#. js-lingui-explicit-id
 msgid "auth.noFamily.title"
 msgstr "Serve un invito"
+
+#. js-lingui-explicit-id
+msgid "plan.nav.prev"
+msgstr "Settimana precedente"
+
+#. js-lingui-explicit-id
+msgid "plan.nav.next"
+msgstr "Settimana successiva"
+
+#. js-lingui-explicit-id
+msgid "meal.item.moveDown"
+msgstr "Sposta giù"
+
+#. js-lingui-explicit-id
+msgid "meal.item.moveUp"
+msgstr "Sposta su"
+
+#. js-lingui-explicit-id
+msgid "meal.past.banner"
+msgstr "Stai correggendo un pasto passato. Le modifiche cambiano anche «cucinato N giorni fa»."
 
 #. js-lingui-explicit-id
 msgid "dishes.filter.status"
@@ -600,6 +812,10 @@ msgid "dish.source.type"
 msgstr "Tipo"
 
 #. js-lingui-explicit-id
+msgid "meal.section.type"
+msgstr "Tipo di pasto"
+
+#. js-lingui-explicit-id
 msgid "dish.source.bookTitle"
 msgstr "Titolo"
 
@@ -608,12 +824,28 @@ msgid "common.remove"
 msgstr "Togli"
 
 #. js-lingui-explicit-id
+msgid "meal.item.remove"
+msgstr "Togli {name} dal pasto"
+
+#. js-lingui-explicit-id
 msgid "dish.source.remove"
 msgstr "Togli questa fonte"
 
 #. js-lingui-explicit-id
+msgid "meal.removeFromDay"
+msgstr "Togli questo pasto da questo giorno"
+
+#. js-lingui-explicit-id
+msgid "meal.removed.toast"
+msgstr "Tolto {name}"
+
+#. js-lingui-explicit-id
 msgid "dishes.back"
 msgstr "Torna ai piatti"
+
+#. js-lingui-explicit-id
+msgid "plan.back"
+msgstr "Torna al piano"
 
 #. js-lingui-explicit-id
 msgid "error.rateLimited"
@@ -626,6 +858,10 @@ msgstr "Tutte le portate"
 #. js-lingui-explicit-id
 msgid "dishes.filter.allStatuses"
 msgstr "Tutti gli stati"
+
+#. js-lingui-explicit-id
+msgid "meal.limit"
+msgstr "Un pasto può avere al massimo {max} voci."
 
 #. js-lingui-explicit-id
 msgid "people.lastAdmin.blocked"
@@ -646,3 +882,7 @@ msgstr "Vai al contenuto"
 #. js-lingui-explicit-id
 msgid "error.notFound.back"
 msgstr "Vai alla pagina di accesso"
+
+#. js-lingui-explicit-id
+msgid "meal.freeText.label"
+msgstr "Voce libera"

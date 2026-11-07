@@ -38,6 +38,35 @@ class EventKey:
     dish_id: UUID | None = None
 
 
+_MEAL_FIELDS = ("meal_date", "meal_type", "meal_slot")
+# Colonne chiave per tipo di unità (05-data §12): (obbligatorie, vietate). Le altre colonne di
+# `EventKey` devono essere assenti. Il database ripete la regola in `ck_change_event_key`.
+_KEY_COLUMNS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
+    "meal_content": (_MEAL_FIELDS, ("subject_person_id", "dish_id")),
+    "meal_guests": (_MEAL_FIELDS, ("subject_person_id", "dish_id")),
+    "attendance": ((*_MEAL_FIELDS, "subject_person_id"), ("dish_id",)),
+    "typical_week": (("subject_person_id",), (*_MEAL_FIELDS, "dish_id")),
+    "membership": (("subject_person_id",), (*_MEAL_FIELDS, "dish_id")),
+    "dish": (("dish_id",), (*_MEAL_FIELDS, "subject_person_id")),
+}
+
+
+def _check_key(unit_type: str, key: EventKey) -> None:
+    """`ValueError` se `key` non ha esattamente le colonne chiave dell'unità (prima di scrivere)."""
+    if unit_type not in _KEY_COLUMNS:
+        raise ValueError("tipo di unità sconosciuto")
+    required, forbidden = _KEY_COLUMNS[unit_type]
+    if any(getattr(key, f) is None for f in required):
+        raise ValueError("chiave dell'evento incompleta per l'unità")
+    if any(getattr(key, f) is not None for f in forbidden):
+        raise ValueError("chiave dell'evento con colonne non ammesse per l'unità")
+    slot, meal_type = key.meal_slot, key.meal_type
+    if slot is not None and not (
+        (meal_type != "other" and slot == 0) or (meal_type == "other" and 0 <= slot <= 4)
+    ):
+        raise ValueError("slot non valido per il tipo di pasto")
+
+
 def record_change(
     tx: Tx,
     ctx: RequestContext,
@@ -53,6 +82,7 @@ def record_change(
     `codec.validate` li controlla qui."""
     if ctx.family_id is None or ctx.person_id is None or ctx.role is None:
         raise ValueError("un evento di persona richiede famiglia, persona e ruolo")
+    _check_key(unit_type, key)
     codec.validate(unit_type, op, before, after)
     tx.execute(
         _INSERT,

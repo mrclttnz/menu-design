@@ -156,7 +156,7 @@ e2e: web-install $(ENSURE_DB)
 	$(PNPM) run build
 	$(PG_ENV); $(PNPM) run test:e2e
 lighthouse:
-	$(call todo,SL-06a,lighthouse)
+	$(call todo,SL-10a,lighthouse)
 perf:
 	$(call todo,SL-10a,perf)
 smoke:
@@ -177,13 +177,8 @@ scan-secrets:
 	gitleaks git . --config .gitleaks.toml --redact --no-banner
 	gitleaks dir . --config .gitleaks.toml --redact --no-banner
 
-# ECCEZIONE STRETTA al cooldown, solo certifi (stessa decisione utente del lock backend):
-# GHSA-6q48-6c7w-9gw2 (CRITICAL) colpisce certifi 2026.7.22; la fix 2026.10.19 e' piu'
-# recente di 7 giorni. Da rimuovere entro ~2026-10-27, insieme all'eccezione in pyproject.toml.
-TOOL_CERTIFI_EXCEPTION := certifi=2026-10-21T00:00:00Z
-
 tools-semgrep:
-	$(UV) tool install --force --exclude-newer "$(TOOL_COOLDOWN)" --exclude-newer-package "$(TOOL_CERTIFI_EXCEPTION)" "semgrep==$(SEMGREP_VERSION)"
+	$(UV) tool install --force --exclude-newer "$(TOOL_COOLDOWN)" "semgrep==$(SEMGREP_VERSION)"
 
 tools-zizmor:
 	$(UV) tool install --force --exclude-newer "$(TOOL_COOLDOWN)" "zizmor==$(ZIZMOR_VERSION)"
@@ -249,7 +244,7 @@ scan-container: tier-container
 tier-container:
 	hadolint Dockerfile
 	docker build -t $(IMAGE_TAG) -f Dockerfile .
-	trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed --no-progress --skip-version-check $(IMAGE_TAG)
+	trivy image --exit-code 1 --ignorefile .trivyignore.yaml --severity HIGH,CRITICAL --ignore-unfixed --no-progress --skip-version-check $(IMAGE_TAG)
 	trivy config --exit-code 1 --severity HIGH,CRITICAL --skip-version-check --skip-dirs .venv,backend/.venv,backend/tests .
 	$(RUN) pytest tests/tools/test_container.py tests/tools/test_container_web.py -m container
 
@@ -258,7 +253,7 @@ ci:
 	./scripts/ci.sh
 
 nightly:
-	$(call todo,SL-06a (nightly.yml da SL-10b),nightly)
+	$(call todo,SL-10a (Lighthouse) e SL-10b (nightly.yml),nightly)
 full:
 	$(call todo,la chiusura di M0 (richiede i livelli di SL-00b),full)
 prerelease:

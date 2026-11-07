@@ -30,6 +30,8 @@
 >
 > **Aggiornamenti integrati nella v2 (2026-10-20):** ADR-0005 rev. 5 e architettura v6 (staging nello stesso progetto GCP, flusso staging automatico → produzione protetta con lo stesso digest, `APP_ENV` obbligatorio, riattivazione di Supabase in pausa); contratto di `/healthz` e regola di `If-Match`; CHG-020 registrato; chiavi UX `validation.invalid_value`, `validation.unknown_field`, `validation.dish_archived` (con `.noRestore`) e `dish_not_planned` aggiunte da UX e architect; azioni A-22 … A-25 e condizione WIF su `ref` del threat model v3.
 >
+> **Correzione del 2026-11-07 (decisione dell'utente, opzione a, su N-2 di `docs/reviews/SL-06a-verification.md`):** il test di SL-06a "pasto di altra famiglia → `404`" non può darsi, perché il pasto è indirizzato da data, tipo e slot e la famiglia viene sempre dalla sessione (ADR-0009); il controllo tra famiglie su piatto e portata resta in SL-06b (SR-041).
+>
 > Convenzioni di dimensione: **S** = meno di mezza giornata di lavoro di un agente; **M** = da mezza giornata a circa un giorno e mezzo. Nessuna slice è L.
 >
 > Le domande aperte dei requisiti si pianificano con il loro default: Q-014 (nessuna traduzione dei contenuti), Q-015 (solo avviso), Q-016 (KPI dall'esportazione della famiglia del Gestore), Q-018 (l'Amministratore rimuove l'account), Q-020 (profili gestiti da Amministratore e Pianificatore).
@@ -689,10 +691,10 @@ Un target segnaposto (per esempio `make perf` prima che esista) fallisce con un 
 | `container` | `hadolint`; `docker build`; `trivy image` (HIGH e CRITICAL con correzione); `trivy config` sul Dockerfile (trivy non ha scanner per `compose.yaml` né per i workflow: i workflow sono coperti da `zizmor`, `compose.yaml` da controlli in `test_container`: porte su 127.0.0.1, nessun `privileged`) | sì | SL-00b |
 | `web` | `pnpm install --frozen-lockfile`; eslint; prettier; tsc; vitest; lingui; client generato senza differenze; `vite build`; budget del bundle ≤ 150 KB gzip | sì | SL-01 |
 | `e2e` | immagine, PostgreSQL e stub OIDC, Playwright Chromium (360 px e desktop) + axe | sì | SL-01 |
-| `nightly` | §6.3 | allarme, non blocca (CHG-018) | Lighthouse da SL-06a, dataset da SL-10a, workflow da SL-10b |
+| `nightly` | §6.3 | allarme, non blocca (CHG-018) | Lighthouse, dataset e login del notturno da SL-10a, workflow da SL-10b |
 | `deploy` | §6.4 | sì (approvazione manuale per la produzione) | SL-10b |
 
-SL-01 ha solo il budget del bundle; Lighthouse parte con la prima vista principale (SL-06a), come accettato da 08-test-strategy I-T2.
+SL-01 ha solo il budget del bundle; Lighthouse parte in SL-10a (era SL-06a: `@lhci/cli` ha 6 advisory HIGH dev, vedi SL-10a), rispetto a 08-test-strategy I-T2.
 
 ### 6.3 Budget dei minuti di GitHub Actions (piano Free, 2.000 min/mese)
 
@@ -856,8 +858,8 @@ Le stime di moduli e file sono indicative.
 - **THR:** THR-020, THR-105.
 - **Migrazioni:** `meal`, `meal_item`, `ix_meal_item_dish`, `app.effective_meals()`.
 - **API:** `GET /plan`, `GET /meals/{date}/{mealType}/{slot}`, `PUT …/presence`.
-- **Contenuto:** `planning` (lettura e presenza del pasto), `views` (piano); contributore di `planning`; S-02 (settimana, navigazione, oggi evidenziato), D-05 (intervallo), S-03 in sola lettura con "aggiungi o togli il pasto"; Lighthouse nel notturno da questa slice (prima vista principale).
-- **Test:** settimana da lunedì nel fuso con `now_utc` spostato; 63 giorni → `422 range_too_large`; pasto di altra famiglia → `404` ed evento; pasto rimesso riusa la riga (versioni crescenti); evento `meal_content` per presenza; stato vuoto del piano.
+- **Contenuto:** `planning` (lettura e presenza del pasto), `views` (piano); contributore di `planning`; S-02 (settimana, navigazione, oggi evidenziato), D-05 (intervallo), S-03 in sola lettura con "aggiungi o togli il pasto"; Lighthouse spostato in SL-10a (vedi lì).
+- **Test:** settimana da lunedì nel fuso con `now_utc` spostato; 63 giorni → `422 range_too_large`; nessun dato attraversa le famiglie; la stessa chiave (data, tipo, slot) agisce solo sulla propria famiglia; pasto rimesso riusa la riga (versioni crescenti); evento `meal_content` per presenza; stato vuoto del piano.
 - **Moduli e file:** circa 20 file.
 - **Dipende da:** SL-05.
 - **Agenti:** backend-developer, frontend-developer, data (revisione di `effective_meals`).
@@ -871,7 +873,7 @@ Le stime di moduli e file sono indicative.
 - **THR:** THR-021.
 - **API:** `PUT …/content` (solo piatti).
 - **Contenuto:** `catalog.ensure_assignable` e `mark_planned` (`ever_planned` monotono); S-03 con voci, riordino "sposta su/giù"; S-04 (selettore ordinato per nome, filtro "da provare", scelta della portata); coda delle scritture per unità nel client (DD-01); su `412` ricarica con avviso generico (finestra completa in SL-19).
-- **Test:** piatto di altra famiglia → `404` ed evento; `course_not_allowed`; 11ª voce; conteggio delle interazioni (NFR-012a); un evento per ogni assegnazione; nessun evento su `412`.
+- **Test:** piatto o portata di altra famiglia → `404` ed evento (SR-041); `course_not_allowed`; 11ª voce; conteggio delle interazioni (NFR-012a); un evento per ogni assegnazione; nessun evento su `412`.
 - **Moduli e file:** circa 20 file.
 - **Dipende da:** SL-06a.
 - **Agenti:** backend-developer, frontend-developer.
@@ -916,7 +918,7 @@ Le stime di moduli e file sono indicative.
 - **SR:** SR-019 (sessioni, flussi, contatori, registro a 12 mesi), SR-028 (backup `age`), SR-029 (dataset sintetici), SR-051 (IP a 90 giorni).
 - **THR:** THR-046, 047, 080, 082, 085, 133.
 - **Migrazioni:** `periodic_task_run`; `maint_security_log_retention()`, `maint_db_size()`.
-- **Contenuto:** `jobs` (`worker --once --max-seconds 240`, compiti idempotenti con advisory lock); compiti di M0; allarme dello spazio al 70%; **libreria `menu.seeding.datasets`** (`minimal`, `isolation`, `lighthouse`, `load`), usata dalle fixture dei test direttamente sul database di test, e **comando `seed` come punto d'ingresso separato** con la guardia ad allow-list (`APP_ENV` `dev` o `staging`, host del database e `SEED_TARGET` in allow-list, A-22); dataset senza segreti riutilizzabili né email reali; misura dello spazio sul dataset `load` (valori in `docs/05-data.md` §14 a cura del data-architect); `Dockerfile.backup` (pg_dump 17 + age) e script del backup.
+- **Contenuto:** `jobs` (`worker --once --max-seconds 240`, compiti idempotenti con advisory lock); compiti di M0; allarme dello spazio al 70%; **libreria `menu.seeding.datasets`** (`minimal`, `isolation`, `lighthouse`, `load`), usata dalle fixture dei test direttamente sul database di test, e **comando `seed` come punto d'ingresso separato** con la guardia ad allow-list (`APP_ENV` `dev` o `staging`, host del database e `SEED_TARGET` in allow-list, A-22); dataset senza segreti riutilizzabili né email reali; misura dello spazio sul dataset `load` (valori in `docs/05-data.md` §14 a cura del data-architect); **Lighthouse nel notturno** (`web/tests/lighthouse/lighthouserc.json`, 5 esecuzioni, `/piano`, LCP warn <= 2000, mai sulle PR, target `make lighthouse`/`nightly`, login con il dataset `lighthouse`). Spostato da SL-06a (decisione utente 2026-10-24): `@lhci/cli` porta 6 advisory HIGH solo dev (2 senza patch); usare uno strumento Lighthouse che passi `pnpm audit` oppure un ADR. `Dockerfile.backup` (pg_dump 17 + age) e script del backup.
 - **Test:** idempotenza; due worker sovrapposti; pulizie; dump con `menu_backup` completo (THR-085); `seed` con `APP_ENV` `production`, `test`, vuoto o sconosciuto → uscita con errore **senza connettersi**; nessun file sotto `tests/` importa il modulo del comando `seed`.
 - **Moduli e file:** circa 18 file.
 - **Dipende da:** SL-03b, SL-07, SL-08, SL-09.
@@ -1465,7 +1467,7 @@ Tutte le storie Must, Should e Could di M0-M2 sono coperte da slice pianificate.
 
 | NFR | Slice | Passo di processo |
 |---|---|---|
-| NFR-001 | SL-01 (budget), SL-06a (Lighthouse notturno), SL-10a (dataset) | ufficiale sullo staging prima di ogni rilascio |
+| NFR-001 | SL-01 (budget), SL-10a (Lighthouse notturno e dataset) | ufficiale sullo staging prima di ogni rilascio |
 | NFR-002 | SL-06a, SL-15 (query) | carico sullo staging (P-12) |
 | NFR-003 | SL-44 | |
 | NFR-004 | SL-04, SL-13 (quote) | |

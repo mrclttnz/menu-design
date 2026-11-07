@@ -38,6 +38,8 @@ from support.tracks import tracked_count
 pytestmark = [pytest.mark.sec, pytest.mark.integration]
 Login = Callable[[Who], Actor]
 OP = "catalog.dish.set_status"
+PRESENCE_OP = "meal.presence.write"  # SL-06a: T(meal_content)
+TRACKING_OPS = {OP, PRESENCE_OP}
 
 # Elenco chiuso (08 §6.3): le scritture che NON generano un evento di modifica. Il piatto si
 # crea e si modifica nella scheda senza evento (FR-061 elenca contenuto dei pasti, presenze,
@@ -70,19 +72,29 @@ def test_the_set_status_route_declares_tracks_in_x_authz(generated_schema: dict[
     assert "dish" in tracks, "T(dish) nel piano §4.2"
 
 
-def test_exactly_the_status_route_tracks_in_sl05(generated_schema: dict[str, Any]) -> None:
+def test_the_presence_route_declares_tracks_meal_content_in_x_authz(
+    generated_schema: dict[str, Any],
+) -> None:
+    found = [op for _, _, op in operations_of(generated_schema) if op["operationId"] == PRESENCE_OP]
+    assert found, f"{PRESENCE_OP} assente dal contratto"
+    assert found[0]["x-authz"].get("tracks") == ["meal_content"]
+
+
+def test_exactly_the_status_and_presence_routes_track_up_to_sl06a(
+    generated_schema: dict[str, Any],
+) -> None:
     tracked = {
         op["operationId"]
         for _, _, op in operations_of(generated_schema)
         if op.get("x-authz", {}).get("tracks")
     }
-    assert tracked == {OP}
+    assert tracked == TRACKING_OPS
 
 
 def test_every_tracked_operation_has_a_tracks_marked_test() -> None:
     """08 §6.3: ogni operazione con `x-authz.tracks` non vuoto ha un test marcato."""
     tracked = {op for op, row in MATRIX.items() if row.get("tracks")}
-    assert tracked == {OP}, "la matrice dei test dichiara le rotte che tracciano"
+    assert tracked == TRACKING_OPS, "la matrice dei test dichiara le rotte che tracciano"
     assert tracked - _marked_tracks() == set(), "operazioni che tracciano senza test `tracks`"
 
 
@@ -110,7 +122,7 @@ def test_every_write_either_tracks_or_is_in_the_closed_list_of_untracked_writes(
 
 def test_the_test_matrix_and_the_closed_list_agree_on_which_writes_exist() -> None:
     unsafe = {op for op, row in MATRIX.items() if row["unsafe"]}
-    assert unsafe == UNTRACKED_WRITES | {OP}
+    assert unsafe == UNTRACKED_WRITES | TRACKING_OPS
 
 
 @pytest.mark.parametrize("op_id", ["catalog.dish.create", "catalog.dish.update"])

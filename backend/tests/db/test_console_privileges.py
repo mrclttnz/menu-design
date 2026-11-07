@@ -16,6 +16,7 @@ _UPDATE_COLUMN = {
     "family_default_meal": "meal_type",
     "security_event": "outcome",
     "dish_course": "course_id",
+    "meal": "meal_type",
 }
 PRIVS = ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER")
 

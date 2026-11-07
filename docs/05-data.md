@@ -1,6 +1,14 @@
 # Modello dei dati: Menu Design
 
-> Documento di proprietà del data-architect. Versione 10, 2026-10-23. **Stato: APPROVATO al gate G3** (2026-10-19, versione 4). La versione 5 contiene le correzioni per il gate G4, da approvare con il piano. La versione 6 contiene le correzioni emerse dalla prima esecuzione reale del DDL (SL-02). La versione 7 contiene quelle di SL-03a (migrazione `0005`). La versione 8 quelle di SL-03b (migrazione `0006`). La versione 9 quelle di SL-04 (migrazione `0007`).
+> Documento di proprietà del data-architect. Versione 11, 2026-10-24. **Stato: APPROVATO al gate G3** (2026-10-19, versione 4). La versione 5 contiene le correzioni per il gate G4, da approvare con il piano. La versione 6 contiene le correzioni emerse dalla prima esecuzione reale del DDL (SL-02). La versione 7 contiene quelle di SL-03a (migrazione `0005`). La versione 8 quelle di SL-03b (migrazione `0006`). La versione 9 quelle di SL-04 (migrazione `0007`). La versione 10 quelle di SL-05 (migrazione `0008`).
+>
+> **Novità della versione 11** (2026-10-24, SL-06a: migrazione `0009` eseguita su PostgreSQL 17, con `upgrade`, `downgrade -1` e `base ↔ head`):
+> - **`meal` e `meal_item`** come nella sezione 4.2, con i nomi dei vincoli. In più rispetto alla v10: `ck_meal_guests_note` (nota non vuota né solo spazi, come il dominio `gn` del codec) e `ck_meal_item_free_text` scritto come `char_length BETWEEN 1 AND 200 AND btrim <> ''`. `guests_note` e `free_text` restano `varchar(200)` come nei test (eccezione voluta alla regola della v6, come `dish.notes`).
+> - **Semantica verificata di `DEFERRABLE INITIALLY IMMEDIATE`** su `uq_meal_item_meal_position` (e su `uq_dish_source_family_id_dish_id_position`): il vincolo si controlla **alla fine di ogni istruzione**, non riga per riga. Uno scambio di posizioni in **un solo** `UPDATE` passa anche senza `SET CONSTRAINTS … DEFERRED`; servono invece le istruzioni separate (sezione 4.2, `meal_item`).
+> - **`app.effective_meals()`** come nella sezione 7.1: due rami disgiunti in `UNION ALL`, giorni come serie di interi sommati a una data (niente `generate_series` su timestamp, che dipenderebbe dal `TimeZone` della sessione). **Inlining verificato** con `EXPLAIN` (nessun `Function Scan on effective_meals`, accesso per prefisso alle PK).
+> - **CR-SL05-004 chiuso nel database:** `ck_change_event_meal_slot` rifiuta uno slot senza tipo, `ck_change_event_key` richiede le colonne chiave **esatte** di ogni tipo di unità (sezione 4.2). Applicati con `NOT VALID` e `VALIDATE`; il `downgrade` ripristina le definizioni di `0008`. Resta da fare il controllo applicativo in `record_change` (backend-developer).
+> - **Eventi di presenza del pasto** (sezione 4.2, `meal`): forme `meal_content` confermate rispetto al codec v1, che non richiede modifiche.
+> - Correzione della sezione 5: `ix_meal_item_dish` è parziale su `kind='dish'` e **non** serve al controllo FK alla cancellazione di un piatto (la query del controllo non implica il predicato); quel controllo usa il prefisso `family_id` di `uq_meal_item_meal_position`.
 >
 > **Novità della versione 10** (2026-10-23, SL-05: migrazione `0008` eseguita su PostgreSQL 17, con `upgrade`, `downgrade -1` e `base ↔ head`):
 > - **`change_event`** come nella sezione 4.2: RLS `p_family_select`/`p_family_insert` (nessuna `FOR ALL`), `p_owner`, `p_backup`; `menu_app` solo `SELECT` e `INSERT`; `tg_change_event_immutable`; i due indici della sezione 5.
@@ -92,7 +100,7 @@
 >
 > Fonti: `docs/02-requirements.md` (v2, approvato G2, con CHG-001 … CHG-020), `docs/01-vision.md` (rev. 7), `docs/04-architecture.md` (v6), ADR-0001 … ADR-0016, `docs/07-plan.md` §11.2, `docs/08-test-strategy.md` (v2), `security-standard.md` di Bottega (§3, §7, §8).
 >
-> **Stato di verifica:** **eseguiti e verificati su PostgreSQL 17** (SL-02, migrazioni `0002`-`0004`): `family`, `family_default_meal`, `person`, `family_bootstrap`, `course`, i loro trigger e policy, `app.family_today()`, `security_event` e le funzioni `console_bootstrap_family`, `console_security_events`, `console_audit_note`. **SL-03a, migrazione `0005`:** `account`, la FK `person.account_id`, `session` con le sue policy, `auth_flow`, `session_resolve`, `bootstrap_resolve`. Il resto del DDL e delle funzioni **non è ancora stato eseguito**: lo verifica la slice che lo crea, e le correzioni tornano qui. Le stime di spazio sono analitiche e vanno misurate (vedi "Stima dello spazio").
+> **Stato di verifica:** **eseguiti e verificati su PostgreSQL 17** (SL-02, migrazioni `0002`-`0004`): `family`, `family_default_meal`, `person`, `family_bootstrap`, `course`, i loro trigger e policy, `app.family_today()`, `security_event` e le funzioni `console_bootstrap_family`, `console_security_events`, `console_audit_note`. **SL-03a, migrazione `0005`:** `account`, la FK `person.account_id`, `session` con le sue policy, `auth_flow`, `session_resolve`, `bootstrap_resolve`. **SL-03b, SL-04, SL-05, SL-06a (migrazioni `0006`-`0009`):** `rate_counter`, `dish`, `dish_course`, `dish_source`, `change_event`, `meal`, `meal_item`, `app.effective_meals()`. Il resto del DDL e delle funzioni **non è ancora stato eseguito**: lo verifica la slice che lo crea, e le correzioni tornano qui. Le stime di spazio sono analitiche e vanno misurate (vedi "Stima dello spazio").
 >
 > Convenzioni:
 > - schema applicativo `app`, estensioni nello schema `extensions` (convenzione Supabase);
@@ -761,21 +769,23 @@ La cancellazione definitiva di un piatto è ammessa solo se `ever_planned = fals
 #### meal (M0), unità (a) e (c)
 | Campo | Tipo | Null | Default | Vincoli | Note |
 |---|---|---|---|---|---|
-| family_id | uuid | no | | PK (`family_id`, `meal_date`, `meal_type`, `meal_slot`). FK → `family` CASCADE | |
+| family_id | uuid | no | | `pk_meal` (`family_id`, `meal_date`, `meal_type`, `meal_slot`). `fk_meal_family_id_family` → `family` CASCADE | |
 | meal_date | date | no | | | Data locale (ADR-0009) |
-| meal_type | text | no | | CK in (`breakfast`, `lunch`, `snack`, `dinner`, `other`) | |
-| meal_slot | smallint | no | 0 | CK `(meal_type <> 'other' AND meal_slot = 0) OR (meal_type = 'other' AND meal_slot BETWEEN 0 AND 4)` | Occorrenza nel giorno. Più "Altro pasto" nello stesso giorno, al massimo 5 attivi (ASM-068), garantiti dal `CHECK` perché le righe rimosse si riusano. **Supportato dal modello da M0**, interfaccia in M2. |
-| name | text | sì | | CK `name IS NULL OR (meal_type = 'other' AND char_length(name) BETWEEN 1 AND 40 AND btrim(name) <> '')` | Nome libero di un "Altro pasto". `NULL` = etichetta localizzata "Altro pasto" nel client (ADR-0010). Contenuto della famiglia. Fa parte dell'unità (a). |
-| presence | text | no | `'inherit'` | CK in (`inherit`, `added`, `removed`). CK `meal_slot = 0 OR presence <> 'inherit'` | Presenza del pasto nel giorno (FR-036). Le occorrenze con `meal_slot > 0` esistono solo se aggiunte esplicitamente. Nei giorni congelati vale solo `added` o `removed`. |
-| special_kind | text | sì | | CK in (`away`, `restaurant`, `skipped`) | FR-039 |
-| content_version | integer | no | 0 | CK ≥ 0 | **Unità (a)**, una per occorrenza. 0 = contenuto mai scritto. Copre voci, stato speciale, nome e `presence`. |
-| content_modified_by | uuid | sì | | FK → `person` | FR-046, messaggio di conflitto |
+| meal_type | text | no | | `ck_meal_meal_type` in (`breakfast`, `lunch`, `snack`, `dinner`, `other`) | |
+| meal_slot | smallint | no | 0 | `ck_meal_meal_slot`: `(meal_type <> 'other' AND meal_slot = 0) OR (meal_type = 'other' AND meal_slot BETWEEN 0 AND 4)` | Occorrenza nel giorno. Più "Altro pasto" nello stesso giorno, al massimo 5 attivi (ASM-068), garantiti dal `CHECK` perché le righe rimosse si riusano. **Supportato dal modello da M0**, interfaccia in M2. |
+| name | text | sì | | `ck_meal_name`: `name IS NULL OR (meal_type = 'other' AND char_length(name) BETWEEN 1 AND 40 AND btrim(name) <> '')` | Nome libero di un "Altro pasto". `NULL` = etichetta localizzata "Altro pasto" nel client (ADR-0010). Contenuto della famiglia. Fa parte dell'unità (a). |
+| presence | text | no | `'inherit'` | `ck_meal_presence` in (`inherit`, `added`, `removed`). `ck_meal_presence_slot`: `meal_slot = 0 OR presence <> 'inherit'` | Presenza del pasto nel giorno (FR-036). Le occorrenze con `meal_slot > 0` esistono solo se aggiunte esplicitamente. Nei giorni congelati vale solo `added` o `removed`. |
+| special_kind | text | sì | | `ck_meal_special_kind` in (`away`, `restaurant`, `skipped`) | FR-039 |
+| content_version | integer | no | 0 | `ck_meal_content_version` ≥ 0 | **Unità (a)**, una per occorrenza. 0 = contenuto mai scritto. Copre voci, stato speciale, nome e `presence`. |
+| content_modified_by | uuid | sì | | `fk_meal_family_id_content_modified_by_person` (`family_id`, `content_modified_by`) → `person` NO ACTION | FR-046, messaggio di conflitto. Nessun indice: le persone non si cancellano, diventano tombstone (sezione 7.3). |
 | content_modified_at | timestamptz | sì | | | |
-| guests_count | smallint | no | 0 | CK `BETWEEN 0 AND 50` | FR-052 |
-| guests_note | varchar(200) | sì | | | Dato riservato (SR-055) |
-| guests_version | integer | no | 0 | CK ≥ 0 | **Unità (c)**, separata dal contenuto, una per occorrenza |
-| guests_modified_by | uuid | sì | | FK → `person` | |
+| guests_count | smallint | no | 0 | `ck_meal_guests_count` `BETWEEN 0 AND 50` | FR-052 |
+| guests_note | varchar(200) | sì | | `ck_meal_guests_note`: `btrim(guests_note) <> ''` (v11). Oltre 200 caratteri: 22001 | Dato riservato (SR-055). Non vuota, come il dominio `gn` del codec (1-200): l'app scrive `NULL` per "nessuna nota". |
+| guests_version | integer | no | 0 | `ck_meal_guests_version` ≥ 0 | **Unità (c)**, separata dal contenuto, una per occorrenza |
+| guests_modified_by | uuid | sì | | `fk_meal_family_id_guests_modified_by_person` → `person` NO ACTION | |
 | guests_modified_at | timestamptz | sì | | | |
+
+RLS standard (`p_family`, `p_owner`, `p_backup`); `menu_app` `SELECT`, `INSERT`, `UPDATE`, `DELETE`; `menu_backup` `SELECT`; `menu_console` nulla.
 
 **Rimozione e nuova aggiunta, per ogni tipo e ogni `meal_slot`** (decisione dell'utente, 2026-10-19):
 - **Rimozione:** `presence='removed'` e `content_version + 1`. Il contenuto resta nella riga, ma non conta perché il pasto non c'è.
@@ -794,22 +804,37 @@ La cancellazione definitiva di un piatto è ammessa solo se `ever_planned = fals
   - se due persone aggiungono nello stesso istante, una delle due non trova la riga libera e il server riprova una volta;
   - con 5 occorrenze attive la richiesta è rifiutata con l'indicazione del limite. Il `CHECK` su `meal_slot` (0-4) garantisce **al massimo 5 attivi** nel database.
 
+**Eventi di presenza (SL-06a, `PUT …/presence`)**, verificati sul codec v1 senza modifiche. Un evento `meal_content` per pasto, chiave (`meal_date`, `meal_type`, `meal_slot`) e nient'altro (`ck_change_event_key`), `op` `clear` per togliere e `set` per aggiungere. I payload si costruiscono con `codec.diff` dallo stato prima e dopo, così contengono solo ciò che è cambiato:
+- **togliere un pasto di default senza riga:** `before={"pr":"inherit"}`, `after={"v":1,"pr":"removed"}` (la riga nasce `removed`, `content_version` 1);
+- **togliere un pasto `added`:** `{"pr":"added"}` → `{"v":1,"pr":"removed"}`. Voci, stato speciale e nome restano nella riga e non compaiono nell'evento;
+- **aggiungere un pasto con riga `inherit` nascosta:** `{"pr":"inherit"}` → `{"v":1,"pr":"added"}`;
+- **riaggiungere un pasto rimosso (riuso della riga):** `before` porta `pr: "removed"`, le voci cancellate **complete** in `i` (con `p` e `d`+`c` oppure `t`, più `n` se vero: il codec rifiuta una voce tolta con il solo `id`), e `s`/`nm` se non erano nulli; `after` porta `pr: "added"` e `s`/`nm` a `null` quando sono cambiati. Così `revert` ricostruisce il contenuto rimosso.
+- **ospiti azzerati alla nuova aggiunta:** un evento `meal_guests` separato (unità (c)) **solo se** `guests_count` o `guests_note` cambiano, `{"g":3,"gn":"…"}` → `{"v":1,"g":0,"gn":null}`; `guests_version` cresce comunque (decisione da confermare, vedi il rapporto di SL-06a).
+- Nessun campo scalare invariato nei payload: il codec oggi lo tollera, ma scriverlo renderebbe impossibile irrigidire `validate` dentro il v1.
+
 **API (ADR-0009):** il pasto si indirizza sempre come `/api/v1/meals/{date}/{mealType}/{slot}`, con lo slot sempre presente nel percorso (`0` per i tipi standard e per il primo "Altro pasto"). Non esiste un percorso senza slot. In M0 e M1 l'interfaccia usa solo lo slot `0`.
 
 #### meal_item (M0)
 | Campo | Tipo | Null | Default | Vincoli | Note |
 |---|---|---|---|---|---|
-| id | uuid | no | `gen_random_uuid()` | PK. UQ (`family_id`, `id`) | Serve per spostare un singolo piatto (FR-042) |
-| family_id, meal_date, meal_type, meal_slot | | no | | FK (`family_id`, `meal_date`, `meal_type`, `meal_slot`) → `meal` ON DELETE CASCADE | |
-| position | smallint | no | | CK `BETWEEN 0 AND 9`. UQ (`family_id`, `meal_date`, `meal_type`, `meal_slot`, `position`) `DEFERRABLE INITIALLY IMMEDIATE` | **Al massimo 10 voci per pasto** nel database (ASM-034, AC-008.9). Riordino con `SET CONSTRAINTS … DEFERRED`. |
-| kind | text | no | | CK in (`dish`, `free_text`) | |
-| dish_id | uuid | sì | | FK (`family_id`, `dish_id`) → `dish` **NO ACTION** | |
-| course_id | uuid | sì | | FK (`family_id`, `course_id`) → `course` NO ACTION | Portata scelta nel pasto. L'app verifica che sia tra le portate del piatto (AC-008.6). Volutamente non è una FK verso `dish_course`, così togliere una portata a un piatto non altera i pasti passati. |
-| free_text | varchar(200) | sì | | CK lunghezza 1-200 | FR-038 |
+| id | uuid | no | `gen_random_uuid()` | `pk_meal_item`. `uq_meal_item_family_id_id` (`family_id`, `id`) | Serve per spostare un singolo piatto (FR-042) |
+| family_id | uuid | no | | `fk_meal_item_family_id_family` → `family` ON DELETE CASCADE (necessaria, vedi "Regola `ON DELETE`") | |
+| family_id, meal_date, meal_type, meal_slot | | no | | `fk_meal_item_meal` (`family_id`, `meal_date`, `meal_type`, `meal_slot`) → `meal` ON DELETE CASCADE | Il dominio di tipo e slot lo garantisce la FK verso `meal` |
+| position | smallint | no | | `ck_meal_item_position` `BETWEEN 0 AND 9`. `uq_meal_item_meal_position` (`family_id`, `meal_date`, `meal_type`, `meal_slot`, `position`) `DEFERRABLE INITIALLY IMMEDIATE` | **Al massimo 10 voci per pasto** nel database (ASM-034, AC-008.9). Vedi "Riordino" sotto. |
+| kind | text | no | | `ck_meal_item_kind` in (`dish`, `free_text`) | |
+| dish_id | uuid | sì | | `fk_meal_item_family_id_dish_id_dish` (`family_id`, `dish_id`) → `dish` **NO ACTION** | |
+| course_id | uuid | sì | | `fk_meal_item_family_id_course_id_course` (`family_id`, `course_id`) → `course` NO ACTION | Portata scelta nel pasto. L'app verifica che sia tra le portate del piatto (AC-008.6). Volutamente non è una FK verso `dish_course`, così togliere una portata a un piatto non altera i pasti passati. |
+| free_text | varchar(200) | sì | | `ck_meal_item_free_text`: `char_length BETWEEN 1 AND 200 AND btrim <> ''`. Oltre 200 caratteri: 22001 | FR-038 |
 | not_cooked | boolean | no | false | | ASM-003, AC-011.1 |
 
-CK di forma:
+CK di forma `ck_meal_item_shape`:
 - `(kind='dish' AND dish_id IS NOT NULL AND course_id IS NOT NULL AND free_text IS NULL) OR (kind='free_text' AND free_text IS NOT NULL AND dish_id IS NULL AND course_id IS NULL AND NOT not_cooked)`.
+
+**Riordino** (verificato su PostgreSQL 17 in SL-06a). Un vincolo unico `DEFERRABLE INITIALLY IMMEDIATE` si controlla alla **fine di ogni istruzione**, non riga per riga come un vincolo non differibile. Quindi:
+- uno scambio in **un solo** `UPDATE` (`SET position = 1 - position`) passa anche senza differire il vincolo;
+- un riordino in **più istruzioni** (una per voce, come fa naturalmente un ciclo applicativo) fallisce alla prima posizione occupata, a meno di `SET CONSTRAINTS uq_meal_item_meal_position DEFERRED` nella transazione. Il servizio usa sempre il `SET CONSTRAINTS`, così il controllo avviene al commit qualunque sia la forma delle istruzioni.
+
+RLS standard (`p_family`, `p_owner`, `p_backup`) e privilegi come `meal`.
 
 #### typical_week e typical_week_absence (M1), unità (e)
 | Tabella | Campo | Tipo | Null | Vincoli / note |
@@ -849,7 +874,7 @@ La validità rispetto all'ingresso (`meal_date >= joined_on`, AC-021.8) la contr
 | op | text | no | | CK in (`set`, `clear`, `move`, `swap`, `copy`, `status_change`, `archive`, `restore`, `role_change`) | |
 | meal_date | date | sì | | | Chiave delle unità del pasto e della presenza |
 | meal_type | text | sì | | CK in (`breakfast`, `lunch`, `snack`, `dinner`, `other`) | |
-| meal_slot | smallint | sì | | CK come `meal.meal_slot` (o NULL) | Occorrenza del pasto. È 0 per tutti i tipi tranne `other`. |
+| meal_slot | smallint | sì | | CK come `meal.meal_slot` (o NULL); da `0009` uno slot richiede `meal_type` non nullo | Occorrenza del pasto. È 0 per tutti i tipi tranne `other`. |
 | subject_person_id | uuid | sì | | | Presenza, settimana tipo, ruolo |
 | dish_id | uuid | sì | | | Unità piatto. Nessuna FK: un piatto mai pianificato può essere cancellato e appare come "piatto eliminato". |
 | before | jsonb | sì | | | **Formato compatto (da M0):** solo gli elementi cambiati, chiavi brevi, soli ID per persone, piatti e portate (SR-047) |
@@ -918,7 +943,7 @@ La validità rispetto all'ingresso (`meal_date >= joined_on`, AC-021.8) la contr
   - `membership`: `role_change` porta `r`.
 
   È un irrigidimento compatibile: finora esistono solo eventi `status_change` con `st`, e la fixture `dish_archive` lo rispetta già.
-- **Chiave dell'evento:** i vincoli da completare sono in CR-SL05-004 (vedi i `CHECK` sulla chiave più sotto e la sezione 12).
+- **Chiave dell'evento:** CR-SL05-004 chiuso nel database dalla migrazione `0009` (vedi i `CHECK` sulla chiave più sotto); manca il controllo in `record_change` (SL-06a).
 - **Più unità in una operazione:** la regola 8 vale da SL-06a. Un test di SL-06a deve verificare un solo `correlation_id`, non nullo, per gli eventi di `move`, `swap` e `copy`.
 
 Riassunto delle chiavi:
@@ -944,16 +969,15 @@ Esempio: aggiunta di un secondo piatto a una Cena:
 - per KPI-1 lo stato di un pasto a una certa ora si ottiene partendo dallo stato attuale e applicando all'indietro i `before` degli eventi successivi, oppure riapplicando in avanti gli `after` dal primo evento;
 - un test di proprietà verifica che la ricostruzione coincida con lo stato salvato.
 
-CK sulla chiave per tipo di unità:
-- `meal_*` richiede `meal_date`, `meal_type` e `meal_slot`;
-- `attendance` richiede in più `subject_person_id`;
-- `typical_week` e `membership` richiedono `subject_person_id`;
-- `dish` richiede `dish_id`.
+CK sulla chiave per tipo di unità (`ck_change_event_key`, colonne **esatte** dalla migrazione `0009`; le colonne chiave che l'unità non usa devono essere NULL, e un tipo sconosciuto dà `false`):
+- `meal_content` e `meal_guests`: `meal_date`, `meal_type`, `meal_slot`; `subject_person_id` e `dish_id` nulli;
+- `attendance`: i tre campi del pasto e `subject_person_id`; `dish_id` nullo;
+- `typical_week` e `membership`: `subject_person_id`; i campi del pasto e `dish_id` nulli;
+- `dish`: `dish_id`; tutte le altre colonne chiave nulle.
 
-**Lacune note di questi `CHECK`** (CR-SL05-004, backlog, da correggere nella prossima migrazione che tocca `change_event`, sezione 12). Nessuna delle due è raggiungibile dal codice di SL-05, perché l'unico chiamante passa `EventKey(dish_id=…)`.
-- `ck_change_event_meal_slot` passa con `meal_type IS NULL` e `meal_slot` non nullo: entrambi i rami valgono NULL.
-- `ck_change_event_key` richiede le colonne chiave del tipo di unità, ma non vieta le altre. Un evento `dish` con `meal_date` valorizzata sarebbe accettato, e comparirebbe in `ix_change_event_family_day` e nella cronologia del giorno (Q7).
-- Anche `record_change` accetta qualunque `EventKey`. Il controllo applicativo corrispondente, cioè l'elenco dei campi ammessi per ogni unità con `ValueError` altrimenti, va aggiunto in SL-06a, prima dei nuovi chiamanti.
+`ck_change_event_meal_slot` (da `0009`): `meal_slot IS NULL OR (meal_type IS NOT NULL AND ((meal_type <> 'other' AND meal_slot = 0) OR (meal_type = 'other' AND meal_slot BETWEEN 0 AND 4)))`.
+
+**CR-SL05-004:** le due lacune di `0008` (slot accettato con `meal_type` NULL, colonne chiave di altre unità accettate) sono chiuse nel database da `0009`. Resta il controllo applicativo in `record_change` (elenco dei campi ammessi per ogni unità, `ValueError` prima di ogni scrittura), a carico del backend-developer in SL-06a (`tests/unit/test_record_change_key.py`).
 
 Immutabilità:
 - `menu_app` ha solo `SELECT` e `INSERT`;
@@ -1031,7 +1055,8 @@ Ogni indice è giustificato da una query o da un vincolo. Le PK e gli UQ elencat
 | dish | `ix_dish_family_priority (family_id, priority DESC, name_search)` (**M2**) | Ordinamento dell'archivio per priorità con paginazione, quando è l'ordinamento preferito dell'account (`account.dish_sort_preference`). Si crea con la colonna `priority`. |
 | dish_course | `ix_dish_course_course (family_id, course_id)` | Filtro per portata (FR-030), conteggio degli utilizzi e controllo FK all'eliminazione di una portata (AC-033.3) |
 | dish_tag | `ix_dish_tag_tag (family_id, tag_id)` | Filtro per tag (FR-031), cascata all'eliminazione di un tag |
-| meal_item | `ix_meal_item_dish (family_id, dish_id, meal_date) WHERE kind='dish'` | "Ultima volta cucinato" (FR-034, FR-040), ordinamento "non cucinato da più tempo" (FR-031), controllo FK alla cancellazione di un piatto (FR-029) |
+| meal_item | `ix_meal_item_dish (family_id, dish_id, meal_date) WHERE kind='dish'` | "Ultima volta cucinato" (FR-034, FR-040, Q3, che filtra `kind='dish'`), ordinamento "non cucinato da più tempo" (FR-031). **Non** serve al controllo FK alla cancellazione di un piatto (correzione v11): la query del controllo (`family_id = $1 AND dish_id = $2`) non implica il predicato `kind='dish'`. Quel controllo, e quello sulla portata (AC-033.3), usano il prefisso `family_id` di `uq_meal_item_meal_position`: qualche migliaio di voci per famiglia, su un'operazione rara (solo piatti con `ever_planned = false`). |
+| meal, meal_item | PK di `meal` e `uq_meal_item_meal_position`, per prefisso (`family_id`, `meal_date`) | Piano (Q2) e `effective_meals` con range sulle date; cascata `meal → meal_item`. Nessun indice in più. |
 | change_event | `ix_change_event_family_time (family_id, occurred_at DESC, id)` | Cronologia paginata a cursore (FR-045), KPI-1 e KPI-2 per settimana |
 | change_event | `ix_change_event_family_day (family_id, meal_date) WHERE meal_date IS NOT NULL` | Cronologia per giorno e per pasto (FR-045, AC-028.1) |
 | family_notice | `ix_family_notice_family (family_id, created_at)` (M1) | Avvisi attivi della famiglia all'apertura del piano |
@@ -1146,6 +1171,11 @@ Si aggiungono a quelli di ADR-0003:
   - giorni ≤ `frozen_through`: le righe `meal` con `presence='added'`;
   - giorni successivi: `presence='added'`, oppure `meal_slot = 0` con `presence='inherit'` (o nessuna riga) e il tipo in `family_default_meal`. Le occorrenze di "Altro pasto" con `meal_slot > 0` esistono solo come righe `added`.
   - La funzione resta una regola pura sui default e su `presence`: non guarda voci né ospiti. AC-003.2 (un pasto futuro con piatti resta visibile anche se il suo tipo esce dai default) lo garantisce il cambio dei default, che rende esplicite quelle righe (sezione 7.2). Così la lettura di Q2 non ha join in più, e il congelamento continua a usare la stessa regola.
+  - **Implementazione** (migrazione `0009`, `LANGUAGE sql STABLE PARALLEL SAFE`, `SECURITY INVOKER`, senza `SET`; `EXECUTE` al solo `menu_app`): `UNION ALL` di due rami disgiunti, quindi nessun duplicato senza `DISTINCT`:
+    1. righe `meal` della famiglia del contesto nell'intervallo con `presence='added'` (qualunque giorno);
+    2. per i giorni in [`greatest(p_from, frozen_through + 1)`, `p_to`], generati come `primo_giorno + generate_series(0, p_to - primo_giorno)` (interi, quindi indipendenti dal `TimeZone` della sessione), i tipi di `family_default_meal` nello slot 0, con un anti-join (`NOT EXISTS`) che esclude le righe slot 0 con `presence <> 'inherit'` (le `added` sono già nel ramo 1, le `removed` nascondono il pasto). Il `NOT EXISTS` ripete il limite `meal_date BETWEEN p_from AND p_to`, così il planner usa un range sulla PK.
+  - Intervallo vuoto o rovesciato: nessuna riga, nessun errore. Senza contesto di famiglia: nessuna riga (RLS e `current_family_id()` NULL). Il limite di 62 giorni (SR-060) lo applica l'API.
+  - Verificata in SL-06a (`tests/db/test_effective_meals.py`): confine esatto su `frozen_through`, righe `inherit` nei giorni congelati ignorate, slot > 0 solo `added`, isolamento tra famiglie, 62 giorni in una chiamata, inlining (`EXPLAIN` senza `Function Scan on effective_meals`).
 - `app.effective_attendance(p_from date, p_to date) → (meal_date, meal_type, meal_slot, person_id, present, source, version)`: per ogni pasto di `effective_meals`, quindi per ogni occorrenza di "Altro pasto".
   - **Giorni ≤ `frozen_through`:** le righe di `attendance` con `present IS NOT NULL`. Comprende i tombstone ("ex membro").
   - **Giorni successivi:** per ogni persona `status='active'` con `joined_on <= meal_date` (ASM-058), la regola di ADR-0007 in quest'ordine:
@@ -1218,7 +1248,7 @@ Le presenze passate, le visite settimanali e gli eventi restano, legati al tombs
 | # | Query | Come la sostiene lo schema |
 |---|---|---|
 | Q1 | Risoluzione della sessione (ogni richiesta): `session` per `token_hash`, poi `person` attiva dell'account | UQ `token_hash`. Policy `p_person_self` e indice `ux_person_account_single_family`. Due ricerche puntuali. |
-| Q2 | Piano di una settimana (fino a 62 giorni): pasti, voci, piatti, presenze, coperti | `effective_meals` ed `effective_attendance` sull'intervallo. PK di `meal` e `meal_item` per prefisso (`family_id`, `meal_date`). PK di `attendance` per prefisso. Persone e settimane tipo sono al massimo 20 righe per famiglia. Per 62 giorni, 3 pasti e 8 persone si leggono circa 1.500 righe al massimo. |
+| Q2 | Piano di una settimana (fino a 62 giorni): pasti, voci, piatti, presenze, coperti | `effective_meals` ed `effective_attendance` sull'intervallo. PK di `meal` e `uq_meal_item_meal_position` per prefisso (`family_id`, `meal_date`) (la PK di `meal_item` è `id`). PK di `attendance` per prefisso. Persone e settimane tipo sono al massimo 20 righe per famiglia. Per 62 giorni, 3 pasti e 8 persone si leggono circa 1.500 righe al massimo. |
 | Q3 | "Cucinato N giorni fa" per tutti i piatti nella scelta del piatto | `SELECT dish_id, max(meal_date) FROM meal_item i JOIN meal m USING (…) WHERE i.family_id=:f AND kind='dish' AND NOT not_cooked AND m.special_kind IS NULL AND m.meal_date < family_today() AND <pasto presente> GROUP BY dish_id`, sostenuta da `ix_meal_item_dish`. Nessuna denormalizzazione: circa 2.200 voci all'anno per famiglia. |
 | Q4 | Ricerca nell'archivio | `WHERE family_id=:f AND name_search LIKE '%' \|\| app.search_norm(:q) \|\| '%'` (pattern con caratteri di escape, parametri legati), più filtri su `dish_course` e `dish_tag` con i relativi indici. Paginazione a cursore su (`name_search`, `id`). |
 | Q5 | Piatti simili (FR-032) | `extensions.similarity(name_search, app.search_norm(:q)) > 0.3` sui piatti della famiglia, ordinati per somiglianza, `LIMIT 5`. |
@@ -1427,12 +1457,12 @@ CREATE FUNCTION app.now_utc() RETURNS timestamptz
 | `app.current_account_id()` | `STABLE` | Sezione 6.1 |
 | `app.search_norm(text)` | `IMMUTABLE`, `STRICT`, `PARALLEL SAFE` | `SELECT lower(extensions.unaccent('extensions.unaccent'::regdictionary, $1))`. Il dizionario esplicito rende sicura la dichiarazione `IMMUTABLE`, necessaria per la colonna generata `dish.name_search`. Probabilmente **non** viene inlinata, perché `unaccent` è `STABLE`, ma resta nell'elenco per la regola sopra. |
 | `app.family_today()` | `STABLE`, `PARALLEL SAFE` | `SELECT (app.now_utc() AT TIME ZONE f.timezone)::date FROM app.family f WHERE f.id = app.current_family_id()`. Sotto RLS: `NULL` senza contesto o con una famiglia inesistente. Verificata in SL-02 attorno alla mezzanotte locale e ai cambi dell'ora legale (`tests/db/test_family_today.py`). |
-| `app.effective_meals(date, date)` | `STABLE` | Set-returning, inlinata quando compare in `FROM` |
+| `app.effective_meals(date, date)` | `STABLE`, `PARALLEL SAFE` | Set-returning, inlinata quando compare in `FROM` (**verificato** in SL-06a con `EXPLAIN`, sezione 7.1) |
 | `app.effective_attendance(date, date)` | `STABLE` | Set-returning, inlinata quando compare in `FROM`, anche dentro `ensure_frozen` |
 
 Sono invece `LANGUAGE plpgsql`, quindi sempre contate: `ensure_frozen`, le funzioni trigger e tutte le funzioni `SECURITY DEFINER` della sezione 3.3. Una nuova funzione `LANGUAGE sql` entra nell'elenco con il suo test. Il controllo di completezza del tester lo impone.
 
-**Stato di verifica:** le affermazioni sull'inlining non sono state provate su un database: in questa sessione non c'era un PostgreSQL disponibile. La regola "tutte le `LANGUAGE sql` nell'elenco" funziona in entrambi i casi, quindi l'incertezza non cambia il test.
+**Stato di verifica:** l'inlining di `effective_meals` è verificato su PostgreSQL 17 (SL-06a). Le altre affermazioni sull'inlining non sono state provate. La regola "tutte le `LANGUAGE sql` nell'elenco" funziona in entrambi i casi, quindi l'incertezza non cambia il test.
 
 ## 12. Migrazioni
 
@@ -1475,10 +1505,11 @@ Sono invece `LANGUAGE plpgsql`, quindi sempre contate: `ensure_frozen`, le funzi
   | `0006` | `rate_counter` (PK `key`, `window_start`; CK chiave di 32 byte e `count >= 1`; tabella normale, senza RLS), `ix_rate_counter_window_start`; grant a `menu_app` (DML) e `menu_backup` (`SELECT`), nessuno a `menu_console`. `rate_block` rinviata (CHG-020) | SL-03b | eseguita |
   | `0007` | `dish` (senza `priority` e `promotion_dismissed_on`), `dish_course`, `dish_source`; CK di dominio, `ck_dish_archived_requires_planned`, trigger `tg_dish_ever_planned_monotonic`; FK composite e FK dirette verso `family`; `ix_dish_family_name`, `ix_dish_course_course`; RLS standard (`p_family`, `p_owner`, `p_backup`), DML a `menu_app`, `SELECT` a `menu_backup`, nulla a `menu_console`; nessuna funzione `SECURITY DEFINER` | SL-04 | eseguita |
   | `0008` | `change_event`; CK di dominio, di chiave per tipo di unità, di forma e dimensione dei payload; trigger `tg_change_event_immutable`; FK solo verso `family` (CASCADE); `ix_change_event_family_time`, `ix_change_event_family_day`; RLS `p_family_select`/`p_family_insert`, `p_owner`, `p_backup`; `SELECT`/`INSERT` a `menu_app`, `SELECT` a `menu_backup`, nulla a `menu_console`; nessuna funzione `SECURITY DEFINER` | SL-05 | eseguita |
-  | `0009` … | Ordine 9 e seguenti del piano: piano, M1 e M2. **La prima che tocca `change_event` include la correzione di CR-SL05-004** (nota più sotto) | | da scrivere |
+  | `0009` | `meal`, `meal_item` (CK di dominio e di forma, `uq_meal_item_meal_position` differibile, FK composite e FK dirette verso `family`), `ix_meal_item_dish`; `app.effective_meals()` (`EXECUTE` al solo `menu_app`); RLS standard, DML a `menu_app`, `SELECT` a `menu_backup`, nulla a `menu_console`; **CR-SL05-004**: `ck_change_event_meal_slot` e `ck_change_event_key` ridefiniti (`NOT VALID` + `VALIDATE`), il `downgrade` ripristina quelli di `0008`; nessuna funzione `SECURITY DEFINER` | SL-06a | eseguita |
+  | `0010` … | Ordine 10 e seguenti del piano: M0 restante, M1 e M2 | | da scrivere |
   | *rinviata* | Solo se FR-002 viene ripreso (CHG-020): `password_credential`, `account_token`, `rate_block`, modifiche ad `account` della sezione 4.3 | | dopo M2 |
 
-  **Nota per la prossima migrazione: `CHECK` di `change_event` (CR-SL05-004, backlog).** Va nella prima revisione dopo `0008`, al più tardi in quella di SL-06a, che porta i primi chiamanti con chiave di pasto. È additiva e non cambia il formato del codec.
+  **`CHECK` di `change_event` (CR-SL05-004): applicata in `0009`** (SL-06a), come descritto qui sotto. È additiva e non cambia il formato del codec.
   - **`ck_change_event_meal_slot`:** ridefinito come `meal_slot IS NULL OR (meal_type IS NOT NULL AND ((meal_type <> 'other' AND meal_slot = 0) OR (meal_type = 'other' AND meal_slot BETWEEN 0 AND 4)))`.
   - **`ck_change_event_key`:** ridefinito con le colonne **esatte** per ogni tipo di unità. Le colonne chiave che non appartengono all'unità devono essere NULL:
     - `meal_content` e `meal_guests`: `meal_date`, `meal_type`, `meal_slot` non nulli; `subject_person_id` e `dish_id` nulli;
@@ -1486,7 +1517,7 @@ Sono invece `LANGUAGE plpgsql`, quindi sempre contate: `ensure_frozen`, le funzi
     - `typical_week` e `membership`: `subject_person_id` non nullo; `meal_date`, `meal_type`, `meal_slot` e `dish_id` nulli;
     - `dish`: `dish_id` non nullo; tutte le altre colonne chiave nulle.
   - **Esecuzione:** in un unico `ALTER TABLE app.change_event`, `DROP CONSTRAINT` e `ADD CONSTRAINT … NOT VALID` con lo stesso nome; poi `VALIDATE CONSTRAINT` (sezione 12, "Vincoli su tabelle grandi"). Le righe di `0008` (solo `dish` con il solo `dish_id`) li rispettano già. Il `downgrade` ripristina le definizioni di `0008`.
-  - **Test:** in `tests/db/test_change_event_schema.py::test_check_constraints_refuse_malformed_events` si aggiungono i casi `meal_type NULL` con `meal_slot 3`, e `dish` con `meal_date` o `subject_person_id`. Un test unitario copre `record_change` con una chiave che non corrisponde all'unità.
+  - **Test:** `tests/db/test_change_event_schema.py` (colonne esatte accettate, colonna mancante o di un'altra unità rifiutata per ogni tipo, slot senza tipo, dominio dello slot), `tests/db/test_migrations.py` (definizioni al head e dopo `downgrade -1`), `tests/unit/test_record_change_key.py` per `record_change`.
 
   Il `CONNECTION LIMIT` e la revoca di `CREATE` sugli schemi stanno in `db/bootstrap.sql`, perché riguardano ruoli e schemi creati fuori da Alembic. Il test d'inventario li verifica a ogni esecuzione della CI.
 
